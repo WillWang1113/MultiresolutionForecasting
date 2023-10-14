@@ -1,317 +1,3 @@
-# import shelve
-# from functools import partial
-# import numpy as np
-# import pandas as pd
-# import scipy.io as sio
-# import torch
-# from torch.utils.data import DataLoader
-# from tqdm import tqdm
-# from ddeint import ddeint
-# from torchlaplace.data_utils import basic_collate_fn
-# from sklearn.preprocessing import StandardScaler
-
-# Real-world dataset
-# def solete_60min(device, double=False, features=["WIND_SPEED[m1s]"], window_width=48):
-#     df = pd.read_csv("SOLETE_data/SOLETE_Pombo_60min.csv",
-#                      index_col=0,
-#                      parse_dates=True,
-#                      infer_datetime_format=True)
-#     df = df.sort_index()
-#     df = df[features].values
-#     trajs = []
-#     start = 0
-#     while start + window_width < len(df):
-#         end = start + window_width
-#         trajs.append(df[start:end])
-#         start += 1
-#     if len(trajs[-1]) != len(trajs[-2]):
-#         trajs.pop()
-#     trajs = np.stack(trajs, axis=0)
-#     t = torch.linspace(20 / window_width, 20, window_width)
-#     if double:
-#         t = t.to(device).double()
-#         trajs = torch.from_numpy(trajs).to(device).double()
-#     else:
-#         t = t.to(device)
-#         trajs = torch.from_numpy(trajs).to(device)
-#     return trajs, t.unsqueeze(0)
-
-# def solete_5min(device, features=["WIND_SPEED[m1s]"]):
-#     df = pd.read_csv("SOLETE_data/SOLETE_Pombo_5min.csv",
-#                      index_col=0,
-#                      parse_dates=True,
-#                      infer_datetime_format=True)
-#     df = df.sort_index()
-#     df = df[features].values
-#     trajs = []
-
-#     start = 0
-#     while start + 48 < len(df):
-#         end = start + 48
-#         trajs.append(df[start:end])
-#         start += 12
-#     if len(trajs[-1]) != len(trajs[-2]):
-#         trajs.pop()
-#     trajs = np.stack(trajs, axis=0)
-#     print(trajs.shape)
-#     t = torch.linspace(20 / (48), 20, 48)
-#     return torch.from_numpy(trajs).to(device).float(), t.to(device).float()
-
-# def traj_sine(device,
-#               double=False,
-#               trajectories_to_sample=100,
-#               t_nsamples=200):
-#     """Generate sine data in the trajectories fashion
-
-#     Args:
-#         device (int): device
-#         double (bool, optional): dtype. Defaults to False.
-#         trajectories_to_sample (int, optional): samples. Defaults to 100.
-#         t_nsamples (int, optional): time steps in each sample. Defaults to 200.
-
-#     Returns:
-#         tuple: trajs, t
-#     """
-#     t_end = 20.0
-#     t_begin = t_end / t_nsamples
-#     if double:
-#         ti = torch.linspace(t_begin, t_end, t_nsamples).to(device).double()
-#     else:
-#         ti = torch.linspace(t_begin, t_end, t_nsamples).to(device)
-
-#     def sampler(t, x0=0):
-#         return torch.sin(t + x0)
-#         return torch.sin(t + x0) + torch.sin(
-#             2 * (t + x0)) + 0.5 * torch.sin(11 * (t + x0))
-
-#     x0s = torch.linspace(0, 2 * torch.pi, trajectories_to_sample)
-#     trajs = []
-#     for x0 in x0s:
-#         trajs.append(sampler(ti, x0))
-#     y = torch.stack(trajs)
-#     trajectories = y.view(trajectories_to_sample, -1, 1)
-#     print(trajectories.shape)
-#     print(ti.shape)
-#     return trajectories, ti
-
-# def time_sine(device,
-#               double=False,
-#               trajectories_to_sample=100,
-#               t_nsamples=201):
-#     """Generate sine data in time series fashion
-
-#     Args:
-#         device (_type_): _description_
-#         double (bool, optional): _description_. Defaults to False.
-#         trajectories_to_sample (int, optional): _description_. Defaults to 100.
-#         t_nsamples (int, optional): _description_. Defaults to 201.
-
-#     Returns:
-#         _type_: _description_
-#     """
-#     # (total_length - window_width) / stride - 1 = n_windows
-#     t_end = 20.0
-#     t_begin = t_end / t_nsamples
-#     window_width = t_nsamples - (trajectories_to_sample + 1)
-#     if double:
-#         ti = torch.linspace(t_begin, t_end, t_nsamples).to(device).double()
-#     else:
-#         ti = torch.linspace(t_begin, t_end, t_nsamples).to(device)
-
-#     def sampler(t):
-#         return torch.sin(t)
-#         return torch.sin(t) + torch.sin(2 * (t)) + 0.5 * torch.sin(11 * (t))
-
-#     traj = sampler(ti)
-#     # traj = torch.cat([traj.reshape(-1,1), ti.reshape(-1,1)], axis=-1)
-#     start = 0
-#     trajs, t = [], []
-#     for i in range(trajectories_to_sample):
-#         end = window_width + start
-#         trajs.append(traj[start:end].unsqueeze(-1))
-#         t.append(ti[start:end])
-#         start += 1
-#     if trajs[-1].shape != trajs[0].shape:
-#         trajs.pop()
-#         t.pop()
-#     y, t = torch.stack(trajs), torch.stack(t)
-#     print(y.shape)
-#     print(t.shape)
-
-#     return y, t
-
-# def generate_data(
-#     device,
-#     dataset,
-#     features=["WIND_SPEED[m1s]"],
-#     double=False,
-#     batch_size=128,
-#     extrap=0,
-#     percent_missing_at_random=0.0,
-#     normalize=True,
-#     test_set_out_of_distribution=True,
-#     noise_std=None,
-#     observe_step=1,
-#     predict_step=1,
-# ):
-#     # trajectories, t = sine(device)
-#     if dataset == "solete_5min":
-#         trajectories, t = solete_5min(device, features=features)
-#     elif dataset == "solete_60min":
-#         trajectories, t = solete_60min(device, features=features)
-#     elif dataset == "traj_sine":
-#         trajectories, t = traj_sine(device=device, double=double)
-#     elif dataset == "time_sine":
-#         trajectories, t = time_sine(device=device, double=double)
-#     else:
-#         raise ValueError("no such dataset")
-#     if not extrap:
-#         bool_mask = torch.FloatTensor(
-#             *trajectories.shape).uniform_() < (1.0 - percent_missing_at_random)
-#         if double:
-#             float_mask = (bool_mask).float().double().to(device)
-#         else:
-#             float_mask = (bool_mask).float().to(device)
-#         trajectories = float_mask * trajectories
-
-#     # # normalize
-#     # if normalize:
-#     #     samples = trajectories.shape[0]
-#     #     dim = trajectories.shape[2]
-#     #     traj = (torch.reshape(trajectories, (-1, dim)) - torch.reshape(
-#     #         trajectories,
-#     #         (-1, dim)).mean(0)) / torch.reshape(trajectories, (-1, dim)).std(0)
-#     #     trajectories = torch.reshape(traj, (samples, -1, dim))
-
-#     if noise_std:
-#         trajectories += torch.randn(trajectories.shape).to(device) * noise_std
-
-#     train_split = int(0.8 * trajectories.shape[0])
-#     test_split = int(0.9 * trajectories.shape[0])
-
-#     if test_set_out_of_distribution:
-#         train_trajectories = trajectories[:train_split]
-#         train_t = t[:train_split]
-
-#         val_trajectories = trajectories[train_split:test_split]
-#         val_t = t[train_split:test_split]
-
-#         test_trajectories = trajectories[test_split:]
-#         test_t = t[test_split:]
-#     else:
-#         traj_index = torch.randperm(trajectories.shape[0])
-#         train_trajectories = trajectories[traj_index[:train_split]]
-#         train_t = t[traj_index[:train_split]]
-#         val_trajectories = trajectories[traj_index[train_split:test_split]]
-#         val_t = t[traj_index[train_split:test_split]]
-#         test_trajectories = trajectories[traj_index[test_split:]]
-#         test_t = t[traj_index[test_split:]]
-
-#     if normalize:
-#         len_train, len_val, len_test = len(train_trajectories), len(val_trajectories), len(test_trajectories)
-#         dim = trajectories.shape[2]
-#         train_mean = torch.reshape(train_trajectories, (-1, dim)).mean(0)
-#         train_std = torch.reshape(train_trajectories, (-1, dim)).std(0)
-#         train_trajectories = (torch.reshape(train_trajectories, (-1, dim)) -
-#                               train_mean) / train_std
-#         val_trajectories = (torch.reshape(val_trajectories, (-1, dim)) -
-#                               train_mean) / train_std
-#         test_trajectories = (torch.reshape(test_trajectories, (-1, dim)) -
-#                               train_mean) / train_std
-#         train_trajectories = train_trajectories.reshape((len_train, -1, dim))
-#         val_trajectories = val_trajectories.reshape((len_val, -1, dim))
-#         test_trajectories = test_trajectories.reshape((len_test, -1, dim))
-
-#     print("train shape:\t", train_trajectories.shape)
-#     print("valid shape:\t", val_trajectories.shape)
-#     print("test shape:\t", test_trajectories.shape)
-#     test_plot_traj = test_trajectories[0]
-
-#     input_dim = train_trajectories.shape[2]
-#     output_dim = input_dim
-
-#     dltrain = DataLoader(
-#         train_trajectories,
-#         batch_size=batch_size,
-#         shuffle=True,
-#         collate_fn=lambda batch: basic_collate_fn(
-#             batch,
-#             t,
-#             # train_t,
-#             data_type="train",
-#             extrap=extrap,
-#             observe_step=observe_step,
-#             predict_step=predict_step,
-#         ),
-#     )
-#     dlval = DataLoader(
-#         val_trajectories,
-#         batch_size=batch_size,
-#         shuffle=False,
-#         collate_fn=lambda batch: basic_collate_fn(
-#             batch,
-#             t,
-#             # val_t,
-#             data_type="test",
-#             extrap=extrap,
-#             observe_step=observe_step,
-#             predict_step=predict_step,
-#         ),
-#     )
-#     dltest = DataLoader(
-#         test_trajectories,
-#         batch_size=batch_size,
-#         shuffle=False,
-#         collate_fn=lambda batch: basic_collate_fn(
-#             batch,
-#             t,
-#             # test_t,
-#             data_type="test",
-#             extrap=extrap,
-#             observe_step=observe_step,
-#             predict_step=predict_step,
-#         ),
-#     )
-#     return (
-#         input_dim,
-#         output_dim,
-#         dltrain,
-#         dlval,
-#         dltest,
-#         t,
-#         train_trajectories,
-#         val_trajectories,
-#         test_trajectories,
-#         train_t,
-#         val_t,
-#         test_t,
-#     )
-
-# # sine_w_t(0, t_nsamples=301)
-
-# # sine(0)
-
-# # (
-# #     input_dim,
-# #     output_dim,
-# #     dltrain,
-# #     dlval,
-# #     dltest,
-# #     t,
-# #     train_trajectories,
-# #     val_trajectories,
-# #     test_trajectories,
-# #     train_t,
-# #     val_t,
-# #     test_t,
-# # ) = generate_data(0, dataset="sine_w_t", extrap=1)
-
-# # for b in dltrain:
-# #     for k in b:
-# #         print(k)
-# #         print(b[k].shape)
-# #     break
-
 ###########################
 # Neural Laplace: Learning diverse classes of differential equations in the Laplace domain
 # Author: Samuel Holt
@@ -322,66 +8,190 @@ import numpy as np
 import scipy.io as sio
 import torch
 from ddeint import ddeint
-from torch.utils.data import DataLoader, SubsetRandomSampler
+from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 import pandas as pd
 from utils import setup_seed
+from statsmodels.tsa.arima_process import ArmaProcess
 
-# from torchlaplace.data_utils import (
-#     basic_collate_fn
-# )
+from model import AIblock
 from NeuralLaplace.torchlaplace.data_utils import basic_collate_fn
 
 from pathlib import Path
 
 local_path = Path(__file__).parent
 
-# DE Datasets
+
+class TimeSeriesDataset(Dataset):
+
+    def __init__(self, trajs, time_steps, observe_steps, avg_terms,
+                 hist_feature, fcst_feature, avail_fcst_feature):
+        if len(time_steps.shape) < 2:
+            time_steps = time_steps.unsqueeze(0)
+
+        # seperate data into different components
+        observed_data = trajs[:, :observe_steps, hist_feature]
+        data_to_predict = trajs[:, observe_steps:, fcst_feature]
+        tp_to_predict = time_steps[:, observe_steps:]
+        observed_tp = time_steps[:, :observe_steps]
+
+        # aggregated if needed
+        if avg_terms > 1:
+            tp_to_predict = tp_to_predict[..., None]
+            observed_tp = observed_tp[..., None]
+
+            observed_data = observed_data.transpose(1, 2)
+            observed_data = torch.nn.functional.avg_pool1d(
+                observed_data, avg_terms, avg_terms)
+            observed_data = observed_data.transpose(1, 2)
+
+            data_to_predict = data_to_predict.transpose(1, 2)
+            data_to_predict = torch.nn.functional.avg_pool1d(
+                data_to_predict, avg_terms, avg_terms)
+            data_to_predict = data_to_predict.transpose(1, 2)
+
+            tp_to_predict = tp_to_predict.transpose(1, 2)
+            tp_to_predict = torch.nn.functional.avg_pool1d(
+                tp_to_predict, avg_terms, avg_terms)
+            tp_to_predict = tp_to_predict.transpose(1,
+                                                    2).squeeze().unsqueeze(0)
+
+            observed_tp = observed_tp.transpose(1, 2)
+            observed_tp = torch.nn.functional.avg_pool1d(
+                observed_tp, avg_terms, avg_terms)
+            observed_tp = observed_tp.transpose(1, 2).squeeze().unsqueeze(0)
+
+        self.observed_data = observed_data
+        self.data_to_predict = data_to_predict
+        self.tp_to_predict = tp_to_predict
+        self.observed_tp = observed_tp
+
+        # get available forecasts if possible
+        self.avail_fcst = False if avail_fcst_feature is None else True
+        if self.avail_fcst:
+            self.available_forecasts = trajs[:, observe_steps:,
+                                             avail_fcst_feature]
+
+    def __len__(self):
+        return len(self.observed_data)
+
+    def __getitem__(self, index):
+        if self.avail_fcst:
+            return self.observed_data[index], self.data_to_predict[
+                index], self.available_forecasts[
+                    index], self.tp_to_predict, self.observed_tp
+        else:
+            return self.observed_data[index], self.data_to_predict[
+                index], torch.tensor(
+                    torch.nan), self.tp_to_predict, self.observed_tp
 
 
-def lotka_volterra_system_with_delay(device,
-                                     double=False,
-                                     trajectories_to_sample=100,
-                                     t_nsamples=200):
+def collate_fn(data):
+    observed_data, data_to_pred, available_forecasts, tp_to_predict, observed_tp = zip(
+        *data)
+    observed_data = torch.stack(observed_data)
+    data_to_pred = torch.stack(data_to_pred)
+    available_forecasts = torch.stack(available_forecasts)
+    tp_to_predict = tp_to_predict[0]
+    observed_tp = observed_tp[0]
 
-    def model(Y, t, d):
-        x, y = Y(t)
-        xd, yd = Y(t - d)
-        return np.array([0.5 * x * (1 - yd), -0.5 * y * (1 - xd)])
+    # filter nan in the available forecasts (unaligned resolution)
+    not_nan_idx = torch.logical_not(torch.isnan(available_forecasts))
+    available_forecasts = available_forecasts[not_nan_idx].reshape(
+        observed_data.shape[0], -1, available_forecasts.shape[-1])
+    if available_forecasts.numel() == 0:
+        available_forecasts = None
 
-    subsample_to_points = t_nsamples
-    compute_points = 1000
-    tt = np.linspace(2, 30, compute_points)
-    sample_step = int(compute_points / subsample_to_points)
-    trajectories_list = []
+    # observe_steps = observed_data.shape[1]
+    data_dict = {
+        "observed_data": observed_data,
+        "data_to_predict": data_to_pred,
+        "available_forecasts": available_forecasts,
+        "observed_tp": observed_tp,
+        "tp_to_predict": tp_to_predict,
+        "observed_mask": None,
+        "mask_predicted_data": None,
+        "labels": None,
+        "mode": "extrap"
+    }
+    return data_dict
 
-    evaluate_points = int(np.floor(np.sqrt(trajectories_to_sample)))
-    x0s1d = np.linspace(0.1, 2, evaluate_points)
-    try:
-        with shelve.open("datasets") as db:
-            trajectories = db[
-                f"lotka_volterra_system_with_delay_trajectories_{evaluate_points}"]
-    except KeyError:
-        for x0 in tqdm(x0s1d):
-            for y0 in x0s1d:
-                yy = ddeint(model,
-                            lambda t: np.array([x0, y0]),
-                            tt,
-                            fargs=(0.1, ))
-                trajectories_list.append(yy)
-        trajectories = np.stack(trajectories_list)
-        with shelve.open("datasets") as db:
-            db[f"lotka_volterra_system_with_delay_trajectories_{evaluate_points}"] = trajectories
-    trajectoriesn = trajectories[:, ::sample_step]
-    tt = tt[::sample_step]
+
+def mfred(device, double=False, window_width=24 * 12 * 2):
+    df = pd.read_csv("datasets/MFRED_wiztemp.csv",
+                     parse_dates=True,
+                     index_col=0).values
+    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
+    trajs = trajs.transpose(0, 2, 1)[::12]
+
+    t = torch.arange(window_width)
+    time = torch.diff(t).sum()
+    sample_rate = window_width / time
     if double:
-        trajectories = torch.from_numpy(trajectoriesn).to(device).double()
-        t = torch.from_numpy(tt).to(device).double()
+        t = t.to(device).double()
+        trajs = torch.from_numpy(trajs).to(device).double()
     else:
-        trajectories = torch.from_numpy(trajectoriesn).to(
-            torch.float32).to(device)
-        t = torch.from_numpy(tt).to(torch.float32).to(device)
-    return trajectories, t
+        t = t.to(device).float()
+        trajs = torch.from_numpy(trajs).to(device).float()
+    features = {
+        "hist_feature": [0],
+        "fcst_feature": [0],
+        # "avail_fcst_feature": None,
+        "avail_fcst_feature": [1],
+    }
+    return trajs, t.unsqueeze(0), sample_rate, features
+
+
+def australia(device, double=False, window_width=24 * 12 * 2):
+    df = pd.read_csv("datasets/zenondo_5min.csv",
+                     index_col=0,
+                     parse_dates=True).values
+
+    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
+    trajs = trajs.transpose(0, 2, 1)[::12]
+
+    # t = torch.linspace(20 / window_width, 20, window_width)
+    # TODO: t range affect the performance ?
+    t = torch.arange(window_width)
+    time = torch.diff(t).sum()
+    sample_rate = window_width / time
+    if double:
+        t = t.to(device).double()
+        trajs = torch.from_numpy(trajs).to(device).double()
+    else:
+        t = t.to(device).float()
+        trajs = torch.from_numpy(trajs).to(device).float()
+    features = {
+        "hist_feature": [0],
+        "fcst_feature": [0],
+        "avail_fcst_feature": None,
+        # "avail_fcst_feature": [],
+    }
+    return trajs, t.unsqueeze(0), sample_rate, features
+
+
+def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
+    df = pd.read_csv("datasets/nrel_all.csv", parse_dates=True,
+                     index_col=0).values
+    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
+    trajs = trajs.transpose(0, 2, 1)[::12]
+
+    t = torch.arange(window_width)
+    time = torch.diff(t).sum()
+    sample_rate = window_width / time
+    if double:
+        t = t.to(device).double()
+        trajs = torch.from_numpy(trajs).to(device).double()
+    else:
+        t = t.to(device).float()
+        trajs = torch.from_numpy(trajs).to(device).float()
+    features = {
+        "hist_feature": [0],
+        "fcst_feature": [0],
+        # "avail_fcst_feature": None,
+        "avail_fcst_feature": [1, 2],
+    }
+    return trajs, t.unsqueeze(0), sample_rate, features
 
 
 def sine(device,
@@ -411,243 +221,40 @@ def sine(device,
         trajs.append(sampler(ti, x0))
     y = torch.stack(trajs)
     trajectories = y.view(trajectories_to_sample, -1, 1)
-    return trajectories, ti
-
-
-def time_sine(device,
-              double=False,
-              trajectories_to_sample=100,
-              t_nsamples=201):
-    """Generate sine data in time series fashion
-
-    Args:
-        device (_type_): _description_
-        double (bool, optional): _description_. Defaults to False.
-        trajectories_to_sample (int, optional): _description_. Defaults to 100.
-        t_nsamples (int, optional): _description_. Defaults to 201.
-
-    Returns:
-        _type_: _description_
-    """
-    # (total_length - window_width) / stride - 1 = n_windows
-    t_end = 20.0
-    t_begin = t_end / t_nsamples
-    window_width = t_nsamples - (trajectories_to_sample + 1)
-    if double:
-        ti = torch.linspace(t_begin, t_end, t_nsamples).to(device).double()
-    else:
-        ti = torch.linspace(t_begin, t_end, t_nsamples).to(device)
-
-    def sampler(t):
-        return torch.sin(t)
-        return torch.sin(t) + torch.sin(2 * (t)) + 0.5 * torch.sin(11 * (t))
-
-    traj = sampler(ti)
-    # traj = torch.cat([traj.reshape(-1,1), ti.reshape(-1,1)], axis=-1)
-    start = 0
-    trajs, t = [], []
-    for i in range(trajectories_to_sample):
-        end = window_width + start
-        trajs.append(traj[start:end].unsqueeze(-1))
-        t.append(ti[start:end])
-        start += 1
-    if trajs[-1].shape != trajs[0].shape:
-        trajs.pop()
-        t.pop()
-    y, t = torch.stack(trajs), torch.stack(t)
-    if double:
-        y = y.to(device).double()
-        t = t.to(device).double()
-    else:
-        y = y.to(device)
-        t = y.to(device)
-
-    return y, t
-
-
-# TODO: add transform or not
-def solete(device,
-           double=False,
-           energy="solar",
-           resolution="5min",
-           transformed=False,
-           window_width=24 * 12 * 2):
-    df = pd.read_csv(f"datasets/SOLETE_new_{resolution}.csv",
-                    index_col=0,
-                    parse_dates=True,
-                    infer_datetime_format=True)
-    df = df.sort_index()
-    if energy == "solar":
-        features = ['TEMPERATURE[degC]', 'POA Irr[kW1m2]', 'P_Solar[kW]']
-        if transformed:
-            features[-1] += '-LNT'
-        else:
-            features[-1] += '[pu]'
-
-        
-    elif energy == "wind":
-        if resolution == "5min" or resolution == "60min":
-            features = ["WIND_SPEED[m1s]", "P_Gaia[kW]"]
-            # features = ["u", "v", "P_Gaia[kW]"]
-        else:
-            features = ["WIND_SPEED[m1s]", "P_synthetic[kW]"]
-            # features = ["u", "v", "P_synthetic[kW]"]
-        if transformed:
-            features[-1] += '-LNT'
-        else:
-            features[-1] += '[pu]'
-        df = df['2018-08':'2019-05']
-    print(features)
-    
-
-    df = df[features].values
-    trajs = []
-    start = 0
-    while start + window_width < len(df):
-        end = start + window_width
-        trajs.append(df[start:end])
-        start += 48
-    if len(trajs[-1]) != len(trajs[-2]):
-        trajs.pop()
-    trajs = np.stack(trajs, axis=0)
-    # t = torch.linspace(20 / window_width, 20, window_width)
-    t = torch.arange(window_width) / 12
-    if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        t = t.to(device)
-        trajs = torch.from_numpy(trajs).to(device)
-    return trajs, t.unsqueeze(0)
+    sample_rate = t_nsamples / ti.diff().sum() * 2 * np.pi
+    print(sample_rate)
+    features = {
+        "hist_feature": [0],
+        "fcst_feature": [0],
+        "avail_fcst_feature": None,
+    }
+    return trajectories, ti.unsqueeze(0), sample_rate, features
 
 
 #  Real-world dataset
-def solete_wind(
-        device,
-        double=False,
-        # features=[
-        #     "TEMPERATURE[degC]", "WIND_SPEED[m1s]", "P_Sythetic(kW)"
-        # ],
-        # features=["TEMPERATURE[degC]"],
-        features=["u", "v", "P_Gaia[kW]"],
-        window_width=24 * 12 * 2):
-    df = pd.read_csv("datasets/SOLETE_clean_5min.csv",
-                     index_col=0,
+def solete(device, double=False, window_width=24 * 12 * 2):
+    df = pd.read_csv("datasets/solete_solar.csv",
                      parse_dates=True,
-                     infer_datetime_format=True)
-    df = df.sort_index()
-    df = df['2018-08':'2019-05']
-    df = df[features].values
-    trajs = []
-    start = 0
-    while start + window_width < len(df):
-        end = start + window_width
-        trajs.append(df[start:end])
-        start += window_width // 8
-    if len(trajs[-1]) != len(trajs[-2]):
-        trajs.pop()
-    trajs = np.stack(trajs, axis=0)
-    # t = torch.linspace(20 / window_width, 20, window_width)
-    t = torch.arange(window_width) / 12
+                     index_col=0).values
+    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
+    trajs = trajs.transpose(0, 2, 1)[::12]
+
+    t = torch.arange(window_width)
+    time = torch.diff(t).sum()
+    sample_rate = window_width / time
     if double:
         t = t.to(device).double()
         trajs = torch.from_numpy(trajs).to(device).double()
     else:
-        t = t.to(device)
-        trajs = torch.from_numpy(trajs).to(device)
-    return trajs, t.unsqueeze(0)
-
-
-#  Real-world dataset
-def solete_solar(
-        device,
-        double=False,
-        features=['TEMPERATURE[degC]', 'POA Irr[kW1m2]', 'P_Solar[kW]'],
-        window_width=24 * 12 * 2):
-    df = pd.read_csv("datasets/SOLETE_clean_5min.csv",
-                     index_col=0,
-                     parse_dates=True,
-                     infer_datetime_format=True)
-    df = df.sort_index()
-    df = df[features].values
-    trajs = []
-    start = 0
-    while start + window_width < len(df):
-        end = start + window_width
-        trajs.append(df[start:end])
-        start += window_width // 8
-    if len(trajs[-1]) != len(trajs[-2]):
-        trajs.pop()
-    trajs = np.stack(trajs, axis=0)
-    # t = torch.linspace(20 / window_width, 20, window_width)
-    t = torch.arange(window_width) / 12
-    if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        t = t.to(device)
-        trajs = torch.from_numpy(trajs).to(device)
-    return trajs, t.unsqueeze(0)
-
-
-def guangdong(device, double, features=["value"], window_width=24 * 4 * 2):
-    df = pd.read_csv("datasets/gd_wind_site.csv")
-    df = df[features].values[:96 * 300]
-    trajs = []
-    # trajs, ts = [], []
-    start = 0
-    while start + window_width < len(df):
-        end = start + window_width
-        trajs.append(df[start:end])
-        # ts.append(t[start:end])
-        start += window_width // 2
-    if len(trajs[-1]) != len(trajs[-2]):
-        trajs.pop()
-        # ts.pop()
-    trajs = np.stack(trajs, axis=0)
-    # ts = torch.stack(ts, axis=0)
-    t = torch.arange(window_width) / 96
-    # t = torch.linspace(window_width / window_width, 20, window_width)
-    if double:
-        # ts = ts.to(device).double()
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        # ts = ts.to(device)
-        t = t.to(device)
-        trajs = torch.from_numpy(trajs).to(device)
-    # trajs = torch.cat([trajs, ts.unsqueeze(-1)], axis=-1)
-    return trajs, t.unsqueeze(0)
-
-
-def GEF(device, double, features=["temp", "load"], window_width=24 * 2):
-    df = pd.read_csv("datasets/GEF_11_14.csv")
-    df = df[features].values
-    trajs = []
-    # trajs, ts = [], []
-    start = 0
-    while start + window_width < len(df):
-        end = start + window_width
-        trajs.append(df[start:end])
-        # ts.append(t[start:end])
-        start += window_width // window_width
-    if len(trajs[-1]) != len(trajs[-2]):
-        trajs.pop()
-        # ts.pop()
-    trajs = np.stack(trajs, axis=0)
-    # ts = torch.stack(ts, axis=0)
-    t = torch.arange(window_width) / 48
-    # t = torch.linspace(window_width / window_width, 20, window_width)
-    if double:
-        # ts = ts.to(device).double()
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        # ts = ts.to(device)
-        t = t.to(device)
-        trajs = torch.from_numpy(trajs).to(device)
-    # trajs = torch.cat([trajs, ts.unsqueeze(-1)], axis=-1)
-    return trajs, t.unsqueeze(0)
+        t = t.to(device).float()
+        trajs = torch.from_numpy(trajs).to(device).float()
+    features = {
+        "hist_feature": [0],
+        "fcst_feature": [0],
+        # "avail_fcst_feature": None,
+        "avail_fcst_feature": [2],
+    }
+    return trajs, t.unsqueeze(0), sample_rate, features
 
 
 def generate_data_set(name,
@@ -663,54 +270,51 @@ def generate_data_set(name,
                       t_nsamples=200,
                       observe_stride=1,
                       predict_stride=1,
-                      observe_steps=0.5,
-                      seed=0,**kwargs):
+                      avail_fcst_stride=12,
+                      add_external_feature=False,
+                      observe_steps=200,
+                      seed=0,
+                      avg_terms=1,
+                      **kwargs):
     setup_seed(seed)
-    if name == "lotka_volterra_system_with_delay":
-        trajectories, t = lotka_volterra_system_with_delay(
-            device, double, trajectories_to_sample, t_nsamples)
+    if name == "nrel":
+        trajectories, t, sample_rate, feature = nrel(
+            device,
+            double,
+            transformed=kwargs.get("transformed"),
+            window_width=kwargs.get("window_width"))
     elif name == "sine":
-        trajectories, t = sine(device, double, trajectories_to_sample,
-                               t_nsamples)
-    elif name == "time_sine":
-        trajectories, t = time_sine(device, double, trajectories_to_sample,
-                                    t_nsamples)
-    elif name == "solete_solar":
-        trajectories, t = solete_solar(device, double)
-    elif name == "solete_wind":
-        trajectories, t = solete_wind(
-            device,
-            double,
-        )
+        trajectories, t, sample_rate, feature = sine(device, double,
+                                                     trajectories_to_sample,
+                                                     t_nsamples)
+    elif name == "australia":
+        trajectories, t, sample_rate, feature = australia(
+            device, double, window_width=kwargs.get("window_width"))
+
     elif name == "solete":
-        print(kwargs)
-        trajectories, t = solete(
-            device,
-            double,
-            energy=kwargs.get("solete_energy"),
-            resolution=kwargs.get("solete_resolution"),
-            transformed=kwargs.get("solete_transformed"),
-            window_width=kwargs.get("solete_window_width")
-        )
-    elif name == "gef":
-        trajectories, t = GEF(
-            device,
-            double,
-        )
-    elif name == "guangdong":
-        trajectories, t = guangdong(
-            device,
-            double,
-        )
+        trajectories, t, sample_rate, feature = solete(
+            device, double, window_width=kwargs.get("window_width"))
+
+    elif name == "mfred":
+        trajectories, t, sample_rate, feature = mfred(
+            device, double, window_width=kwargs.get("window_width"))
 
     else:
         raise ValueError("Unknown Dataset To Test")
 
+    if not add_external_feature:
+        feature["avail_fcst_feature"] = None
+
+    # if avg_terms > 1:
+    #     avg_layer = AIblock(avg_terms, avg_terms)
+    #     trajectories = avg_layer(trajectories)
+    #     t = avg_layer(t.unsqueeze(-1)).squeeze()
+    # print(t.shape)
     if not extrap:
         bool_mask = torch.FloatTensor(
             *trajectories.shape).uniform_() < (1.0 - percent_missing_at_random)
         if double:
-            float_mask = (bool_mask).float().double().to(device)
+            float_mask = (bool_mask).double().to(device)
         else:
             float_mask = (bool_mask).float().to(device)
         trajectories = float_mask * trajectories
@@ -747,12 +351,16 @@ def generate_data_set(name,
             train_t = t
             val_t = t
             test_t = t
+
     if normalize:
         len_train, len_val, len_test = len(train_trajectories), len(
             val_trajectories), len(test_trajectories)
         dim = trajectories.shape[2]
-        train_mean = torch.reshape(train_trajectories, (-1, dim)).mean(0)
-        train_std = torch.reshape(train_trajectories, (-1, dim)).std(0)
+        train_mean = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
+        train_mean = torch.from_numpy(np.nanmean(train_mean,
+                                                 axis=0)).to(device)
+        train_std = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
+        train_std = torch.from_numpy(np.nanstd(train_std, axis=0)).to(device)
         train_trajectories = (torch.reshape(train_trajectories, (-1, dim)) -
                               train_mean) / train_std
         val_trajectories = (torch.reshape(val_trajectories,
@@ -765,78 +373,140 @@ def generate_data_set(name,
     else:
         train_std = 1
         train_mean = 0
-
     rand_idx = torch.randperm(len(train_trajectories)).tolist()
     train_trajectories = train_trajectories[rand_idx]
-    dltrain = DataLoader(
-        train_trajectories,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=lambda batch: basic_collate_fn(
-            batch,
-            train_t,
-            data_type="train",
-            extrap=extrap,
-            observe_stride=observe_stride,
-            predict_stride=predict_stride,
-            observe_steps=observe_steps),
-    )
-    dlval = DataLoader(
-        val_trajectories,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=lambda batch: basic_collate_fn(
-            batch,
-            val_t,
-            data_type="test",
-            extrap=extrap,
-            observe_stride=observe_stride,
-            predict_stride=predict_stride,
-            observe_steps=observe_steps),
-    )
-    dltest = DataLoader(
-        test_trajectories,
-        batch_size=batch_size,
-        shuffle=False,
-        collate_fn=lambda batch: basic_collate_fn(
-            batch,
-            test_t,
-            data_type="test",
-            extrap=extrap,
-            observe_stride=observe_stride,
-            predict_stride=predict_stride,
-            observe_steps=observe_steps),
-    )
+    dltrain = DataLoader(TimeSeriesDataset(train_trajectories, train_t,
+                                           observe_steps, avg_terms,
+                                           **feature),
+                         batch_size=batch_size,
+                         shuffle=False,
+                         collate_fn=collate_fn)
+    dlval = DataLoader(TimeSeriesDataset(val_trajectories, val_t,
+                                         observe_steps, avg_terms, **feature),
+                       batch_size=batch_size,
+                       shuffle=False,
+                       collate_fn=collate_fn)
+    dltest = DataLoader(TimeSeriesDataset(test_trajectories, test_t,
+                                          observe_steps, avg_terms, **feature),
+                        batch_size=batch_size,
+                        shuffle=False,
+                        collate_fn=collate_fn)
+    # dltrain = DataLoader(
+    #     train_trajectories,
+    #     batch_size=batch_size,
+    #     shuffle=False,
+    #     collate_fn=lambda batch: basic_collate_fn(
+    #         batch,
+    #         train_t,
+    #         data_type="train",
+    #         extrap=extrap,
+    #         observe_stride=observe_stride,
+    #         predict_stride=predict_stride,
+    #         avail_fcst_stride=avail_fcst_stride,
+    #         observe_steps=observe_steps // avg_terms,
+    #         **feature),
+    # )
+    # dlval = DataLoader(
+    #     val_trajectories,
+    #     batch_size=batch_size,
+    #     shuffle=False,
+    #     collate_fn=lambda batch: basic_collate_fn(
+    #         batch,
+    #         val_t,
+    #         data_type="test",
+    #         extrap=extrap,
+    #         observe_stride=observe_stride,
+    #         predict_stride=predict_stride,
+    #         avail_fcst_stride=avail_fcst_stride,
+    #         observe_steps=observe_steps // avg_terms,
+    #         **feature),
+    # )
+    # dltest = DataLoader(
+    #     test_trajectories,
+    #     batch_size=batch_size,
+    #     shuffle=False,
+    #     collate_fn=lambda batch: basic_collate_fn(
+    #         batch,
+    #         test_t,
+    #         data_type="test",
+    #         extrap=extrap,
+    #         observe_stride=observe_stride,
+    #         predict_stride=predict_stride,
+    #         avail_fcst_stride=avail_fcst_stride,
+    #         observe_steps=observe_steps // avg_terms,
+    #         **feature),
+    # )
 
     b = next(iter(dltrain))
-    input_dim = b["observed_data"].shape[-1]
+    if b["available_forecasts"] is not None:
+        input_dim = (b["observed_data"].shape[-1],
+                     b["available_forecasts"].shape[-1])
+        avail_fcst_timesteps = b["available_forecasts"].shape[1]
+    else:
+        input_dim = (b["observed_data"].shape[-1], None)
+        avail_fcst_timesteps = None
+
     output_dim = b["data_to_predict"].shape[-1]
-    input_timesteps = b["observed_data"].shape[1]
+    input_timesteps = (b["observed_data"].shape[1], avail_fcst_timesteps)
     output_timesteps = b["data_to_predict"].shape[1]
-    return (input_dim, output_dim, dltrain, dlval, dltest, input_timesteps,
-            output_timesteps, train_mean, train_std)
+
+    return (input_dim, output_dim, sample_rate, t, dltrain, dlval, dltest,
+            input_timesteps, output_timesteps, train_mean, train_std, feature)
 
 
-# (
-#     input_dim,
-#     output_dim,
-#     dltrain,
-#     dlval,
-#     dltest,
-#     input_timesteps,
-#     output_timesteps,
-# ) = generate_data_set("solete_solar",
-#                       0,
-#                       extrap=1,
-#                       normalize=False,
-#                       batch_size=3)
+# (input_dim, output_dim, sample_rate, t, dltrain, dlval, dltest,
+#  input_timesteps, output_timesteps, train_mean,
+#  train_std) = generate_data_set("nrel",
+#                                 "cpu",
+#                                 extrap=1,
+#                                 normalize=True,
+#                                 batch_size=5,
+#                                 window_width=24 * 12 * 3,
+#                                 observe_steps=24 * 12 * 2,
+#                                 avg_terms=1,
+#                                 transformed=False,
+#                                 noise_std=False,
+#                                 test_set_out_of_distribution=True,
+#                                 avail_fcst_stride=1)
 
+# print(input_dim)
 # for b in dltrain:
 #     for k in b:
 #         print(k)
-#         print(b[k].shape)
+#         try:
+#             print(b[k].shape)
+#         except:
+#             continue
+#         # print(b[k].shape)
 #     break
 
+# from benchmarks import GeneralNeuralNetwork
+# from model import GeneralNeuralLaplace
+
+# # m = GeneralNeuralLaplace(input_dim=input_dim,
+# #                          output_dim=output_dim,
+# #                          input_timesteps=input_timesteps,
+# #                          output_timesteps=output_timesteps,
+# #                          latent_dim=2,
+# #                          hidden_units=64,
+# #                          s_recon_terms=33,
+# #                          use_sphere_projection=True,
+# #                          include_s_recon_terms=True,
+# #                          encode_obs_time=False,
+# #                          encoder="rnn",
+# #                          ilt_algorithm="fourier",
+# #                          device="cpu",
+# #                          method="single")
+# m = GeneralNeuralNetwork(obs_dim=input_dim,
+#                          out_dim=output_dim,
+#                          out_timesteps=output_timesteps,
+#                          in_timesteps=input_timesteps,
+#                          method="mlp")
+# print(m.training_step(b))
+# print(sum(p.numel() for p in m.model.parameters()))
+# print(m)
+# for p in m.model.named_parameters():
+#     print(p)
 # print(
 #     input_dim,
 #     output_dim,

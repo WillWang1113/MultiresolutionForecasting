@@ -148,18 +148,37 @@ class GRUEncoder(nn.Module):
 
 class LSTMNetwork(nn.Module):
 
-    def __init__(self, in_dim, hidden_units, out_dim, out_timesteps):
+    def __init__(self, in_dim, in_timesteps, hidden_units, out_dim,
+                 out_timesteps):
         super(LSTMNetwork, self).__init__()
-        self.lstm = nn.LSTM(in_dim, hidden_units, 2, batch_first=True)
-        self.linear_out = nn.Linear(hidden_units, out_dim * out_timesteps)
+        hist_dim_in, avail_fcst_dim_in = in_dim
+        _, avail_fcst_tsteps = in_timesteps
+        self.avail_fcst = False if avail_fcst_dim_in is None else True
+
+        self.lstm = nn.LSTM(hist_dim_in, hidden_units, 2, batch_first=True)
+
+        concat_dim = hidden_units
+        if avail_fcst_dim_in is not None:
+            concat_dim += avail_fcst_dim_in * avail_fcst_tsteps
+        print(self.avail_fcst)
+
+        self.linear_out = nn.Linear(concat_dim, out_dim * out_timesteps)
         self.out_timesteps = out_timesteps
         self.out_dim = out_dim
         # nn.init.xavier_uniform_(self.linear_out.weight)
 
-    def forward(self, i):
-        out, _ = self.lstm(i)
-        return self.linear_out(out[:, -1, :]).reshape(-1, self.out_timesteps,
-                                                      self.out_dim)
+    def forward(self, observed_data, available_forecasts):
+        out, _ = self.lstm(observed_data)
+
+        if self.avail_fcst:
+            out = torch.concat((out[:, -1, :], available_forecasts.flatten(1)),
+                               axis=-1)
+        else:
+            out = out[:, -1, :]
+        out = self.linear_out(out).reshape(-1, self.out_timesteps,
+                                           self.out_dim)
+
+        return out
 
 
 class MLPNetwork(nn.Module):
@@ -167,35 +186,48 @@ class MLPNetwork(nn.Module):
     def __init__(self, in_dim, in_timesteps, out_timesteps, hidden_units,
                  out_dim):
         super(MLPNetwork, self).__init__()
-        self.nn = nn.Sequential(nn.Flatten(),
-                                nn.Linear(in_dim * in_timesteps, hidden_units),
+        hist_dim_in, avail_fcst_dim_in = in_dim
+        hist_tsteps, avail_fcst_tsteps = in_timesteps
+        self.avail_fcst = False if avail_fcst_dim_in is None else True
+        inputs_dim = hist_dim_in * hist_tsteps
+        if avail_fcst_dim_in is not None:
+            inputs_dim += avail_fcst_dim_in * avail_fcst_tsteps
+        self.nn = nn.Sequential(nn.Linear(inputs_dim, hidden_units),
                                 nn.Sigmoid())
         self.linear_out = nn.Linear(hidden_units, out_dim * out_timesteps)
         self.out_timesteps = out_timesteps
         self.out_dim = out_dim
+        print(self.avail_fcst)
         # nn.init.xavier_uniform_(self.linear_out.weight)
 
-    def forward(self, i):
-        out = self.nn(i)
-        return self.linear_out(out).reshape(-1, self.out_timesteps,
-                                            self.out_dim)
+    def forward(self, observed_data, available_forecasts):
+        if self.avail_fcst:
+            out = torch.concat(
+                (observed_data.flatten(1), available_forecasts.flatten(1)),
+                axis=-1)
+        else:
+            out = observed_data.flatten(1)
+        out = self.nn(out)
+        out = self.linear_out(out).reshape(-1, self.out_timesteps,
+                                           self.out_dim)
+        return out
 
 
 class Persistence(nn.Module):
 
-    def __init__(self, out_timesteps, kind="naive"):
+    def __init__(self, out_timesteps, out_feature, kind="naive"):
         super(Persistence, self).__init__()
 
         self.out_timesteps = out_timesteps
+        self.out_feature = out_feature
         self.kind = kind
-        # nn.init.xavier_uniform_(self.linear_out.weight)
 
     def forward(self, i):
         if self.kind == "naive":
             out = i[:, [-1], :].repeat(1, self.out_timesteps, 1)
         elif self.kind == "loop":
             out = i[:, -self.out_timesteps:, :]
-        return out
+        return out[..., self.out_feature]
 
 
 class GeneralNODE(nn.Module):
@@ -277,13 +309,18 @@ class GeneralPersistence(nn.Module):
     def __init__(
         self,
         out_timesteps,
+        out_feature,
         method="naive",
     ):
         super(GeneralPersistence, self).__init__()
         if method == "naive":
-            self.model = Persistence(out_timesteps=out_timesteps, kind="naive")
+            self.model = Persistence(out_timesteps=out_timesteps,
+                                     out_feature=out_feature,
+                                     kind="naive")
         elif method == "loop":
-            self.model = Persistence(out_timesteps=out_timesteps, kind="loop")
+            self.model = Persistence(out_timesteps=out_timesteps,
+                                     out_feature=out_feature,
+                                     kind="loop")
         else:
             raise ValueError("No such Persistence model.")
         self.loss_fn = torch.nn.MSELoss()
@@ -320,11 +357,11 @@ class GeneralPersistence(nn.Module):
         for batch in dl:
             predictions.append(self.model(batch["observed_data"]))
             if batch["mode"] == "extrap":
-                # trajs.append(batch["data_to_predict"])
-                trajs.append(
-                    torch.cat(
-                        (batch["observed_data"], batch["data_to_predict"]),
-                        axis=1))
+                trajs.append(batch["data_to_predict"])
+                # trajs.append(
+                #     torch.cat(
+                #         (batch["observed_data"], batch["data_to_predict"]),
+                #         axis=1))
             else:
                 trajs.append(batch["data_to_predict"])
         return torch.cat(predictions, 0), torch.cat(trajs, 0)
@@ -352,7 +389,8 @@ class GeneralNeuralNetwork(nn.Module):
     ):
         super(GeneralNeuralNetwork, self).__init__()
         if method == "lstm":
-            self.model = LSTMNetwork(obs_dim, nhidden, out_dim, out_timesteps)
+            self.model = LSTMNetwork(obs_dim, in_timesteps, nhidden, out_dim,
+                                     out_timesteps)
         elif method == "mlp":
             self.model = MLPNetwork(obs_dim, in_timesteps, out_timesteps,
                                     nhidden, out_dim)
@@ -364,7 +402,8 @@ class GeneralNeuralNetwork(nn.Module):
         cum_loss = 0
         cum_batches = 0
         for batch in dl:
-            preds = self.model(batch["observed_data"])
+            preds = self.model(batch["observed_data"],
+                               batch["available_forecasts"])
             cum_loss += self.loss_fn(torch.flatten(preds),
                                      torch.flatten(batch["data_to_predict"]))
             cum_batches += 1
@@ -372,7 +411,8 @@ class GeneralNeuralNetwork(nn.Module):
         return mse
 
     def training_step(self, batch):
-        preds = self.model(batch["observed_data"])
+        preds = self.model(batch["observed_data"],
+                           batch["available_forecasts"])
         return self.loss_fn(torch.flatten(preds),
                             torch.flatten(batch["data_to_predict"]))
 
@@ -390,13 +430,15 @@ class GeneralNeuralNetwork(nn.Module):
         self.model.eval()
         predictions, trajs = [], []
         for batch in dl:
-            predictions.append(self.model(batch["observed_data"]))
+            predictions.append(
+                self.model(batch["observed_data"],
+                           batch["available_forecasts"]))
             if batch["mode"] == "extrap":
-                # trajs.append(batch["data_to_predict"])
-                trajs.append(
-                    torch.cat(
-                        (batch["observed_data"], batch["data_to_predict"]),
-                        axis=1))
+                trajs.append(batch["data_to_predict"])
+                # trajs.append(
+                #     torch.cat(
+                #         (batch["observed_data"], batch["data_to_predict"]),
+                #         axis=1))
             else:
                 trajs.append(batch["data_to_predict"])
         return torch.cat(predictions, 0), torch.cat(trajs, 0)
@@ -404,7 +446,9 @@ class GeneralNeuralNetwork(nn.Module):
     def encode(self, dl):
         encodings = []
         for batch in dl:
-            encodings.append(self.model.encode(batch["observed_data"]))
+            encodings.append(
+                self.model.encode(batch["observed_data"],
+                                  batch["available_forecasts"]))
         return torch.cat(encodings, 0)
 
     def _get_and_reset_nfes(self):
