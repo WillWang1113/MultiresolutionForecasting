@@ -30,7 +30,7 @@ If you also want to have the same figures in the papaer, please refer to ```01-p
 ### Example
 An example of seamless multi-resolution forecasts on wind power from Hierarchical Laplace(HL) and benchmarks.
 
-![image info](./savings/display.png)
+![image info](./assets/display.png)
 
 
 ## Acknowledge
