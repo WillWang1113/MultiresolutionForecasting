@@ -1,21 +1,8 @@
-###########################
-# Neural Laplace: Learning diverse classes of differential equations in the Laplace domain
-# Author: Samuel Holt
-###########################
-import shelve
-from functools import partial
 import numpy as np
-import scipy.io as sio
 import torch
-from ddeint import ddeint
 from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
 import pandas as pd
 from utils import setup_seed
-from statsmodels.tsa.arima_process import ArmaProcess
-
-from model import AIblock
-from NeuralLaplace.torchlaplace.data_utils import basic_collate_fn
 
 from pathlib import Path
 
@@ -116,7 +103,7 @@ def collate_fn(data):
     }
     return data_dict
 
-
+# electricity load dataset
 def mfred(device, double=False, window_width=24 * 12 * 2):
     df = pd.read_csv("datasets/MFRED_wiztemp.csv",
                      parse_dates=True,
@@ -141,35 +128,7 @@ def mfred(device, double=False, window_width=24 * 12 * 2):
     }
     return trajs, t.unsqueeze(0), sample_rate, features
 
-
-def australia(device, double=False, window_width=24 * 12 * 2):
-    df = pd.read_csv("datasets/zenondo_5min.csv",
-                     index_col=0,
-                     parse_dates=True).values
-
-    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
-    trajs = trajs.transpose(0, 2, 1)[::12]
-
-    # t = torch.linspace(20 / window_width, 20, window_width)
-    # TODO: t range affect the performance ?
-    t = torch.arange(window_width)
-    time = torch.diff(t).sum()
-    sample_rate = window_width / time
-    if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        t = t.to(device).float()
-        trajs = torch.from_numpy(trajs).to(device).float()
-    features = {
-        "hist_feature": [0],
-        "fcst_feature": [0],
-        "avail_fcst_feature": None,
-        # "avail_fcst_feature": [],
-    }
-    return trajs, t.unsqueeze(0), sample_rate, features
-
-
+# wind power dataset
 def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
     df = pd.read_csv("datasets/nrel_all.csv", parse_dates=True,
                      index_col=0).values
@@ -193,7 +152,7 @@ def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
     }
     return trajs, t.unsqueeze(0), sample_rate, features
 
-
+# toy dataset
 def sine(device,
          double=False,
          trajectories_to_sample=100,
@@ -231,32 +190,6 @@ def sine(device,
     return trajectories, ti.unsqueeze(0), sample_rate, features
 
 
-#  Real-world dataset
-def solete(device, double=False, window_width=24 * 12 * 2):
-    df = pd.read_csv("datasets/solete_solar.csv",
-                     parse_dates=True,
-                     index_col=0).values
-    trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
-    trajs = trajs.transpose(0, 2, 1)[::12]
-
-    t = torch.arange(window_width)
-    time = torch.diff(t).sum()
-    sample_rate = window_width / time
-    if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
-    else:
-        t = t.to(device).float()
-        trajs = torch.from_numpy(trajs).to(device).float()
-    features = {
-        "hist_feature": [0],
-        "fcst_feature": [0],
-        # "avail_fcst_feature": None,
-        "avail_fcst_feature": [2],
-    }
-    return trajs, t.unsqueeze(0), sample_rate, features
-
-
 def generate_data_set(name,
                       device,
                       double=False,
@@ -287,13 +220,6 @@ def generate_data_set(name,
         trajectories, t, sample_rate, feature = sine(device, double,
                                                      trajectories_to_sample,
                                                      t_nsamples)
-    elif name == "australia":
-        trajectories, t, sample_rate, feature = australia(
-            device, double, window_width=kwargs.get("window_width"))
-
-    elif name == "solete":
-        trajectories, t, sample_rate, feature = solete(
-            device, double, window_width=kwargs.get("window_width"))
 
     elif name == "mfred":
         trajectories, t, sample_rate, feature = mfred(
@@ -305,11 +231,7 @@ def generate_data_set(name,
     if not add_external_feature:
         feature["avail_fcst_feature"] = None
 
-    # if avg_terms > 1:
-    #     avg_layer = AIblock(avg_terms, avg_terms)
-    #     trajectories = avg_layer(trajectories)
-    #     t = avg_layer(t.unsqueeze(-1)).squeeze()
-    # print(t.shape)
+
     if not extrap:
         bool_mask = torch.FloatTensor(
             *trajectories.shape).uniform_() < (1.0 - percent_missing_at_random)
@@ -328,14 +250,9 @@ def generate_data_set(name,
         train_trajectories = trajectories[:train_split, :, :]
         val_trajectories = trajectories[train_split:test_split, :, :]
         test_trajectories = trajectories[test_split:, :, :]
-        if name.__contains__("time"):
-            train_t = t[:train_split]
-            val_t = t[train_split:test_split]
-            test_t = t[test_split:]
-        else:
-            train_t = t
-            val_t = t
-            test_t = t
+        train_t = t
+        val_t = t
+        test_t = t
 
     else:
         traj_index = torch.randperm(trajectories.shape[0])
@@ -343,14 +260,9 @@ def generate_data_set(name,
         val_trajectories = trajectories[
             traj_index[train_split:test_split], :, :]
         test_trajectories = trajectories[traj_index[test_split:], :, :]
-        if name.__contains__("time"):
-            train_t = t[traj_index[:train_split]]
-            val_t = t[traj_index[train_split:test_split]]
-            test_t = t[traj_index[test_split:]]
-        else:
-            train_t = t
-            val_t = t
-            test_t = t
+        train_t = t
+        val_t = t
+        test_t = t
 
     if normalize:
         len_train, len_val, len_test = len(train_trajectories), len(
@@ -391,51 +303,6 @@ def generate_data_set(name,
                         batch_size=batch_size,
                         shuffle=False,
                         collate_fn=collate_fn)
-    # dltrain = DataLoader(
-    #     train_trajectories,
-    #     batch_size=batch_size,
-    #     shuffle=False,
-    #     collate_fn=lambda batch: basic_collate_fn(
-    #         batch,
-    #         train_t,
-    #         data_type="train",
-    #         extrap=extrap,
-    #         observe_stride=observe_stride,
-    #         predict_stride=predict_stride,
-    #         avail_fcst_stride=avail_fcst_stride,
-    #         observe_steps=observe_steps // avg_terms,
-    #         **feature),
-    # )
-    # dlval = DataLoader(
-    #     val_trajectories,
-    #     batch_size=batch_size,
-    #     shuffle=False,
-    #     collate_fn=lambda batch: basic_collate_fn(
-    #         batch,
-    #         val_t,
-    #         data_type="test",
-    #         extrap=extrap,
-    #         observe_stride=observe_stride,
-    #         predict_stride=predict_stride,
-    #         avail_fcst_stride=avail_fcst_stride,
-    #         observe_steps=observe_steps // avg_terms,
-    #         **feature),
-    # )
-    # dltest = DataLoader(
-    #     test_trajectories,
-    #     batch_size=batch_size,
-    #     shuffle=False,
-    #     collate_fn=lambda batch: basic_collate_fn(
-    #         batch,
-    #         test_t,
-    #         data_type="test",
-    #         extrap=extrap,
-    #         observe_stride=observe_stride,
-    #         predict_stride=predict_stride,
-    #         avail_fcst_stride=avail_fcst_stride,
-    #         observe_steps=observe_steps // avg_terms,
-    #         **feature),
-    # )
 
     b = next(iter(dltrain))
     if b["available_forecasts"] is not None:
@@ -453,66 +320,3 @@ def generate_data_set(name,
     return (input_dim, output_dim, sample_rate, t, dltrain, dlval, dltest,
             input_timesteps, output_timesteps, train_mean, train_std, feature)
 
-
-# (input_dim, output_dim, sample_rate, t, dltrain, dlval, dltest,
-#  input_timesteps, output_timesteps, train_mean,
-#  train_std) = generate_data_set("nrel",
-#                                 "cpu",
-#                                 extrap=1,
-#                                 normalize=True,
-#                                 batch_size=5,
-#                                 window_width=24 * 12 * 3,
-#                                 observe_steps=24 * 12 * 2,
-#                                 avg_terms=1,
-#                                 transformed=False,
-#                                 noise_std=False,
-#                                 test_set_out_of_distribution=True,
-#                                 avail_fcst_stride=1)
-
-# print(input_dim)
-# for b in dltrain:
-#     for k in b:
-#         print(k)
-#         try:
-#             print(b[k].shape)
-#         except:
-#             continue
-#         # print(b[k].shape)
-#     break
-
-# from benchmarks import GeneralNeuralNetwork
-# from model import GeneralNeuralLaplace
-
-# # m = GeneralNeuralLaplace(input_dim=input_dim,
-# #                          output_dim=output_dim,
-# #                          input_timesteps=input_timesteps,
-# #                          output_timesteps=output_timesteps,
-# #                          latent_dim=2,
-# #                          hidden_units=64,
-# #                          s_recon_terms=33,
-# #                          use_sphere_projection=True,
-# #                          include_s_recon_terms=True,
-# #                          encode_obs_time=False,
-# #                          encoder="rnn",
-# #                          ilt_algorithm="fourier",
-# #                          device="cpu",
-# #                          method="single")
-# m = GeneralNeuralNetwork(obs_dim=input_dim,
-#                          out_dim=output_dim,
-#                          out_timesteps=output_timesteps,
-#                          in_timesteps=input_timesteps,
-#                          method="mlp")
-# print(m.training_step(b))
-# print(sum(p.numel() for p in m.model.parameters()))
-# print(m)
-# for p in m.model.named_parameters():
-#     print(p)
-# print(
-#     input_dim,
-#     output_dim,
-#     dltrain,
-#     dlval,
-#     dltest,
-#     input_timesteps,
-#     output_timesteps,
-# )

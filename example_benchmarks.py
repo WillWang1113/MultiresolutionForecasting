@@ -1,31 +1,19 @@
-###########################
-# Neural Laplace: Learning diverse classes of differential equations in the Laplace domain
-# Author: Samuel Holt
-###########################
-import os
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import argparse
 import logging
 import pickle
 from pathlib import Path
 from time import strftime
 import pandas as pd
-import numpy as np
 import torch
 
-# torch.cuda.empty_cache()
-# torch.cuda.memory_summary(device=None, abbreviated=False)
 from sklearn.metrics import mean_squared_error
 from dataset import generate_data_set
 
 from model import GeneralNeuralLaplace
-# from baseline_models.ode_models import GeneralLatentODE
-# from baseline_models.original_latent_ode import GeneralLatentODEOfficial
-from benchmarks import GeneralNODE, GeneralNeuralNetwork, GeneralPersistence
+from benchmarks import GeneralNeuralNetwork, GeneralPersistence
 from utils import train_and_test, setup_seed, init_weights
 
-datasets = ["sine", "solete", "nrel", "mfred", "australia"]
+datasets = ["sine", "nrel", "mfred"]
 
 file_name = Path(__file__).stem
 
@@ -38,10 +26,7 @@ def experiment_with_all_baselines(
         hidden_units, avg_terms_list, patience, device,
         use_sphere_projection, ilt_algorithm, solete_energy, solete_resolution,
         transformed, window_width, add_external_feature, persistence):
-    # Compares against all baselines, returning a pandas DataFrame of the test RMSE extrapolation error with std across input seed runs
-    # Also saves out training meta-data in a ./results folder (such as training loss array and NFE array against the epochs array)
-    # observe_samples = (time_points_to_sample // 2) // observe_step
-    # logger.info(f"Experimentally observing {observe_samples} samples")
+    # Compares against all baselines, 
 
     df_list_baseline_results = []
 
@@ -110,8 +95,8 @@ def experiment_with_all_baselines(
                         output_dim=output_dim,
                         latent_dim=latent_dim,
                         hidden_units=hidden_units,
-                        s_recon_terms=s_terms,
-                        # s_recon_terms=161,
+                        # s_recon_terms=s_terms,
+                        s_recon_terms=33,
                         use_sphere_projection=use_sphere_projection,
                         include_s_recon_terms=True,
                         ilt_algorithm=ilt_algorithm,
@@ -122,30 +107,30 @@ def experiment_with_all_baselines(
                         output_timesteps=output_timesteps,
                         method="single").to(device),
                 ),
-                # (
-                #     "LSTM",
-                #     GeneralNeuralNetwork(obs_dim=input_dim,
-                #                          out_dim=output_dim,
-                #                          out_timesteps=output_timesteps,
-                #                          in_timesteps=input_timesteps,
-                #                          nhidden=hidden_units,
-                #                          method="lstm").to(device),
-                # ),
-                # (
-                #     "MLP",
-                #     GeneralNeuralNetwork(obs_dim=input_dim,
-                #                          out_dim=output_dim,
-                #                          out_timesteps=output_timesteps,
-                #                          in_timesteps=input_timesteps,
-                #                          nhidden=hidden_units,
-                #                          method="mlp").to(device),
-                # ),
-                # (
-                #     "Persistence",
-                #     GeneralPersistence(out_timesteps=output_timesteps,
-                #                        out_feature=feature["fcst_feature"],
-                #                        method=persistence).to(device),
-                # ),
+                (
+                    "LSTM",
+                    GeneralNeuralNetwork(obs_dim=input_dim,
+                                         out_dim=output_dim,
+                                         out_timesteps=output_timesteps,
+                                         in_timesteps=input_timesteps,
+                                         nhidden=hidden_units,
+                                         method="lstm").to(device),
+                ),
+                (
+                    "MLP",
+                    GeneralNeuralNetwork(obs_dim=input_dim,
+                                         out_dim=output_dim,
+                                         out_timesteps=output_timesteps,
+                                         in_timesteps=input_timesteps,
+                                         nhidden=hidden_units,
+                                         method="mlp").to(device),
+                ),
+                (
+                    "Persistence",
+                    GeneralPersistence(out_timesteps=output_timesteps,
+                                       out_feature=feature["fcst_feature"],
+                                       method=persistence).to(device),
+                ),
             ]
 
             for model_name, system in models:
@@ -164,8 +149,7 @@ def experiment_with_all_baselines(
                         optimizer = torch.optim.Adam(system.model.parameters(),
                                                      lr=learning_rate,
                                                      weight_decay=weight_decay)
-                        lr_scheduler_step = 20
-                        lr_decay = 0.5
+
                         scheduler = None
                         train_losses, val_losses, train_nfes, _ = train_and_test(
                             system,
@@ -178,7 +162,6 @@ def experiment_with_all_baselines(
                             epochs=epochs,
                             patience=patience,
                         )
-                    val_preds, val_trajs = system.predict(dlval)
                     test_preds, test_trajs = system.predict(dltest)
                     print(test_preds.shape)
                     print(test_trajs.shape)
@@ -193,7 +176,6 @@ def experiment_with_all_baselines(
                         'test_rmse': test_rmse,
                         'seed': seed
                     })
-                    # train_preds, train_trajs = system.predict(dltrain)
 
                     sub_saved_dict[model_name] = {
                         "test rmse": test_rmse,
@@ -202,8 +184,6 @@ def experiment_with_all_baselines(
                         "train_losses": train_losses.detach().cpu().numpy(),
                         "val_losses": val_losses.detach().cpu().numpy(),
                         "train_nfes": train_nfes.detach().cpu().numpy(),
-                        # "val_preds": val_preds.detach().cpu().numpy(),
-                        # "val_trajs": val_trajs.detach().cpu().numpy(),
                         "test_preds": test_preds.detach().cpu().numpy(),
                         "test_trajs": test_trajs.detach().cpu().numpy(),
                     }

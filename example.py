@@ -1,31 +1,18 @@
-###########################
-# Neural Laplace: Learning diverse classes of differential equations in the Laplace domain
-# Author: Samuel Holt
-###########################
-import os
-
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import argparse
 import logging
 import pickle
 from pathlib import Path
 from time import strftime
 import pandas as pd
-import numpy as np
 import torch
 
-# torch.cuda.empty_cache()
-# torch.cuda.memory_summary(device=None, abbreviated=False)
 from sklearn.metrics import mean_squared_error
 from dataset import generate_data_set
 
-# from model import GeneralNeuralLaplace
 from model import GeneralHNL
-# from baseline_models.ode_models import GeneralLatentODE
-# from baseline_models.original_latent_ode import GeneralLatentODEOfficial
 from utils import train_and_test, setup_seed, init_weights
 
-datasets = ["sine", "solete", "nrel", "mfred", "australia"]
+datasets = ["sine", "nrel", "mfred"]
 
 file_name = Path(__file__).stem
 
@@ -40,10 +27,7 @@ def experiment_with_all_baselines(
         patience, device, use_sphere_projection, ilt_algorithm, solete_energy,
         solete_resolution, transformed, window_width, shared_encoder,
         add_external_feature, **kwargs):
-    # Compares against all baselines, returning a pandas DataFrame of the test RMSE extrapolation error with std across input seed runs
-    # Also saves out training meta-data in a ./results folder (such as training loss array and NFE array against the epochs array)
-    # observe_samples = (time_points_to_sample // 2) // observe_step
-    # logger.info(f"Experimentally observing {observe_samples} samples")
+
 
     df_list_baseline_results = []
 
@@ -185,10 +169,9 @@ def experiment_with_all_baselines(
             optimizer = torch.optim.Adam(system.model.parameters(),
                                          lr=learning_rate,
                                          weight_decay=weight_decay)
-            lr_scheduler_step = 20
-            lr_decay = 0.5
+
             scheduler = None
-            train_losses, val_losses, train_nfes, _ = train_and_test(
+            train_losses, val_losses, _, _ = train_and_test(
                 system,
                 dltrain,
                 dlval,
@@ -199,7 +182,6 @@ def experiment_with_all_baselines(
                 epochs=epochs,
                 patience=patience,
             )
-            val_preds, val_trajs = system.predict(dlval)
             test_preds, test_trajs = system.predict(dltest)
 
             assert test_trajs.shape == test_preds[-1].shape
@@ -212,19 +194,12 @@ def experiment_with_all_baselines(
                 'test_rmse': test_rmse,
                 'seed': seed
             })
-            # train_preds, train_trajs = system.predict(dltrain)
 
             saved_dict[model_name] = {
                 "seed": seed,
                 "model_state_dict": system.model.state_dict(),
                 "train_losses": train_losses.detach().cpu().numpy(),
                 "val_losses": val_losses.detach().cpu().numpy(),
-                # "train_nfes": train_nfes.detach().cpu().numpy(),
-                # "train_epochs": train_epochs.detach().cpu().numpy(),
-                # "train_preds": train_preds.detach().cpu().numpy(),
-                # "train_trajs": train_trajs.detach().cpu().numpy(),
-                # "val_preds": val_preds,
-                # "val_trajs": val_trajs.detach().cpu().numpy(),
                 "test_preds": test_preds,
                 "test_trajs": test_trajs.detach().cpu().numpy(),
             }
@@ -310,11 +285,7 @@ if __name__ == "__main__":
         'cuda:' + str(args.gpu) if torch.cuda.is_available() else 'cpu')
 
     Path("./logs").mkdir(parents=True, exist_ok=True)
-    # path_run_name = "nwf_dnnFE_addloss_{}-{}-{}-{}-{}-{}-{}-{}-{}".format(
-    #     f"{args.dataset}", f"obs_{args.observe_steps}", "hnl", args.encoder,
-    #     f"sterms_{args.avg_terms_list}", f"latent_{args.latent_dim}",
-    #     f"shared_encoder{args.shared_encoder}", f"pass_raw{args.pass_raw}",
-    #     f"wd_{args.weight_decay}")
+
     path_run_name = "{}-{}".format(file_name, strftime("%Y%m%d-%H%M%S"))
 
     logging.basicConfig(
