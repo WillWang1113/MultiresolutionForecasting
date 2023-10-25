@@ -102,6 +102,9 @@ class Persistence(nn.Module):
         return out[..., self.out_feature]
 
 
+
+
+
 class GeneralPersistence(nn.Module):
 
     def __init__(

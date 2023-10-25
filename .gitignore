@@ -162,5 +162,8 @@ cython_debug/
 NeuralLaplace/
 results/
 logs/
+savings/
 nohup.out
 run_neural_laplace.sh
+integerate_opt_single.py
+post_opt_simple.py

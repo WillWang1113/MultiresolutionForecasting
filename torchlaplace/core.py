@@ -98,14 +98,12 @@ def laplace_reconstruct(
     else:
         raise ValueError(
             "Unsupported time tensor shape, please use (batch, time_dim)")
-    # print(t.shape)
+
     batch_dim = p.shape[0]
     s, T = ilt.compute_s(torch.squeeze(
         t))  # s shape: [timesteps, s_recon_terms], T shape: [timesteps]
     T = T
-    # print(T)
-    # print(s.shape)
-    # print(T.shape)
+
 
     if use_sphere_projection:
         thetam, phim = complex_to_spherical_riemann(torch.flatten(s.real),
@@ -132,7 +130,6 @@ def laplace_reconstruct(
                 sph_coords = torch.concat(
                     (thetam, phim), axis=-1
                 )  # sph_coords shape: [timesteps, s_recon_terms * 2]
-                # print(sph_coords)
                 # ****** simplication version (only for fixed t) ******
                 sph_coords = sph_coords[[0], ...]
                 sph_coords = sph_coords.repeat(
@@ -154,84 +151,14 @@ def laplace_reconstruct(
             inputs = torch.cat((sph_coords, p), axis=-1)
 
 
-
-
-        # # * Original Concat
-        # sph_coords = torch.concat(
-        #     (thetam, phim),
-        #     axis=-1)  # sph_coords shape: [timesteps, s_recon_terms * 2]
-        # # print(sph_coords)
-
-        # # * STACK
-        # # sph_coords = torch.stack(
-        # #     (thetam, phim),
-        # #     axis=-1)  # sph_coords shape: [timesteps, s_recon_terms, 2]
-
-        # # ****** Original Codel ******
-        # # print(p)
-        # # p = p.view(batch_dim, 1, -1).repeat(
-        # #     1, time_dim,
-        # #     1)  # p shape: [batchsize, timesteps, latent_dim]
-
-        # # ****** simplication version (only for fixed t) ******
-        # # sph_coords: time indepent and batch independent
-        # # p: time independent
-        # sph_coords = sph_coords[0, ...]
-
-        # # ****** s independent version (=RNN) ******
-        # # p = p.view(batch_dim, 1, -1).repeat(
-        # #     1, s_terms_dim,
-        # #     1)  # p shape: [batchsize, s_recon_terms, latent_dim]
-        # if len(t.shape) == 2 and batch_dim == t.shape[0]:
-        #     # TODO: s_recon_terms independent
-        #     inputs = torch.cat(
-        #         (
-        #             sph_coords.view(batch_dim, time_dim, -1),
-        #             p,
-        #         ),
-        #         axis=-1,
-        #     )
-
-        # else:
-        #     # keep sterms as feature, delete timesteps --> orig_spd1
-        #     inputs = torch.cat(
-        #         (
-        #             sph_coords.view(1, -1).repeat(batch_dim, 1),
-        #             p,
-        #         ),
-        #         axis=-1,
-        #     )  # inputs shape: [batchsize, s_recon_terms * 2 + latent_dim]
-
-        #     # delete timesteps, delete sterms --> orig_spd2
-        #     # inputs = torch.cat(
-        #     #     (
-        #     #         sph_coords.view(1, -1, 2).repeat(batch_dim, 1, 1),
-        #     #         p,
-        #     #     ),
-        #     #     axis=-1,
-        #     # )  # inputs shape: [batchsize, s_recon_terms, latent_dim + 2]
-
-        #     # ****** Original Codel ******
-        #     # inputs = torch.cat(
-        #     #     (
-        #     #         sph_coords.view(1, time_dim, -1).repeat(batch_dim, 1, 1),
-        #     #         p,
-        #     #     ),
-        #     #     axis=-1,
-        #     # )  # inputs shape: [batchsize, timesteps, s_recon_terms * 2 + latent_dim]
-
         theta, phi = laplace_rep_func(inputs)
 
         # * Repeat time_steps times
         theta = theta.repeat(1, time_dim, 1)
         phi = phi.repeat(1, time_dim, 1)
-        # print(time_dim)
-        # print(theta.shape)
-        # print(phi.shape)
         sr = spherical_to_complex(theta, phi)
         ss = sr.view(-1, time_dim, recon_dim, s_terms_dim)
-        # print(ss[0][0])
-        # print(ss.shape)
+
     else:
         # TODO: s_recon_terms independent
         s_split = torch.cat((s.real, s.imag), 1)

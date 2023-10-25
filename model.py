@@ -16,7 +16,6 @@ class SphereSurfaceModel(nn.Module):
             s_dim,
             output_dim,
             latent_dim,
-            #  out_timesteps,
             include_s_recon_terms=True,
             hidden_units=64):
         super(SphereSurfaceModel, self).__init__()
@@ -31,9 +30,6 @@ class SphereSurfaceModel(nn.Module):
                    s_dim) if include_s_recon_terms else (2 * output_dim)
         self.dim_in = dim_in
 
-        # # TODO: Test RNN
-        # self.rnn = nn.RNN(dim_in, hidden_units, batch_first=True, nonlinearity="relu")
-        # self.linear_out = nn.Linear(hidden_units, dim_out)
 
         self.linear_tanh_stack = nn.Sequential(
             nn.Linear(dim_in, hidden_units),
@@ -44,7 +40,6 @@ class SphereSurfaceModel(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_units, dim_out),
         )
-        # self.out_timesteps = out_timesteps
 
         self.divide_point = (
             self.output_dim *
@@ -116,7 +111,6 @@ class MyNeuralLaplace(nn.Module):
             include_s_recon_terms=include_s_recon_terms,
             output_dim=output_dim,
             latent_dim=latent_dim,
-            # out_timesteps=output_timesteps,
         )
 
         torchlaplace.inverse_laplace.device = device
@@ -139,8 +133,6 @@ class MyNeuralLaplace(nn.Module):
             include_s_recon_terms=self.include_s_recon_terms,
             ilt_algorithm=self.ilt_algorithm,
             options={"start_k": self.start_k})
-        # out = self.output_dense(out)
-        # out = out.reshape(observed_data.shape[0], -1, self.output_dim)
         return out
 
 
@@ -223,7 +215,6 @@ class HierarchicalNeuralLaplace(nn.Module):
         torchlaplace.inverse_laplace.device = device
 
 
-    # TODO: Loss on different level?
     def forward(self, observed_data, available_forecasts, observed_tp,
                 tp_to_predict):
         all_fcsts, all_recons = [], []
@@ -284,7 +275,7 @@ class HierarchicalNeuralLaplace(nn.Module):
         return all_fcsts
 
 
-    #TODO: fcst1 = 1, fcst2 = 1+2, fcst3 = 1+2+3
+    # fcst1 = 1, fcst2 = 1+2, fcst3 = 1+2+3
     @torch.no_grad()
     def predict(self, observed_data, available_forecasts, observed_tp,
                 tp_to_predict):
@@ -404,8 +395,7 @@ class HierarchicalNeuralLaplace(nn.Module):
                     out = out - recon
                     fcsts.append(fcst.cpu().numpy())
                     recons.append(recon.cpu().numpy())
-                    # fcsts += fcst
-                    # recons += recon
+
 
             all_fcsts.append(fcsts)
             all_recons.append(recons)
@@ -538,67 +528,35 @@ class GeneralNeuralLaplace(nn.Module):
                  encoder="rnn",
                  ilt_algorithm="fourier",
                  device="cpu",
-                 method="single",
                  **kwargs):
         super(GeneralNeuralLaplace, self).__init__()
 
-        if method == "single" and isinstance(s_recon_terms, int):
-            self.model = MyNeuralLaplace(
-                input_dim,
-                output_dim,
-                latent_dim=latent_dim,
-                hidden_units=hidden_units,
-                s_recon_terms=s_recon_terms,
-                use_sphere_projection=use_sphere_projection,
-                encode_obs_time=encode_obs_time,
-                include_s_recon_terms=include_s_recon_terms,
-                ilt_algorithm=ilt_algorithm,
-                device=device,
-                encoder=encoder,
-                input_timesteps=input_timesteps,
-                output_timesteps=output_timesteps,
-                start_k=kwargs.get("start_k", 0))
-        elif method == "hierarchical" and isinstance(s_recon_terms, list):
-            self.model = HierarchicalNeuralLaplace(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                input_timesteps=input_timesteps,
-                output_timesteps=output_timesteps,
-                latent_dim=latent_dim,
-                hidden_units=hidden_units,
-                s_recon_terms=s_recon_terms,
-                use_sphere_projection=use_sphere_projection,
-                include_s_recon_terms=include_s_recon_terms,
-                encode_obs_time=encode_obs_time,
-                ilt_algorithm=ilt_algorithm,
-                encoder=encoder,
-                device=device,
-                pass_raw=kwargs.get("pass_raw", False),
-                avg_terms_list=kwargs.get("avg_terms_list", [1, 1, 1]),
-                shared_encoder=kwargs.get("shared_encoder", False))
-
-        else:
-            raise ValueError(
-                "Neural Laplace method can only be 'single' or 'hierarchical'."
-            )
-        self.method = method
+        self.model = MyNeuralLaplace(
+            input_dim,
+            output_dim,
+            latent_dim=latent_dim,
+            hidden_units=hidden_units,
+            s_recon_terms=s_recon_terms,
+            use_sphere_projection=use_sphere_projection,
+            encode_obs_time=encode_obs_time,
+            include_s_recon_terms=include_s_recon_terms,
+            ilt_algorithm=ilt_algorithm,
+            device=device,
+            encoder=encoder,
+            input_timesteps=input_timesteps,
+            output_timesteps=output_timesteps,
+            start_k=kwargs.get("start_k", 0))
         self.loss_fn = torch.nn.MSELoss()
 
     def _get_loss(self, dl):
         cum_loss = 0
         cum_samples = 0
         for batch in dl:
-            if self.method == "single":
-                preds = self.model(batch["observed_data"],
-                                   batch["available_forecasts"],
-                                   batch["observed_tp"],
-                                   batch["tp_to_predict"])
-            else:
-                preds, _ = self.model(batch["observed_data"],
-                                      batch["available_forecasts"],
-                                      batch["observed_tp"],
-                                      batch["tp_to_predict"])
-                # cum_loss += recon_loss
+            preds = self.model(batch["observed_data"],
+                                batch["available_forecasts"],
+                                batch["observed_tp"],
+                                batch["tp_to_predict"])
+            
             cum_loss += self.loss_fn(torch.flatten(preds),
                                      torch.flatten(batch["data_to_predict"])
                                      ) * batch["observed_data"].shape[0]
@@ -607,18 +565,11 @@ class GeneralNeuralLaplace(nn.Module):
         return mse
 
     def training_step(self, batch):
-        if self.method == "single":
-            preds = self.model(batch["observed_data"],
-                               batch["available_forecasts"],
-                               batch["observed_tp"], batch["tp_to_predict"])
-            recon_loss = 0
-        else:
-            preds, recon_loss = self.model(batch["observed_data"],
-                                           batch["available_forecasts"],
-                                           batch["observed_tp"],
-                                           batch["tp_to_predict"])
-        # print(preds.shape)
-        # print(batch["data_to_predict"].shape)
+        preds = self.model(batch["observed_data"],
+                            batch["available_forecasts"],
+                            batch["observed_tp"], batch["tp_to_predict"])
+        recon_loss = 0
+        
         loss = self.loss_fn(torch.flatten(preds),
                             torch.flatten(
                                 batch["data_to_predict"])) + recon_loss
@@ -641,24 +592,15 @@ class GeneralNeuralLaplace(nn.Module):
         self.model.eval()
         predictions, trajs = [], []
         for batch in dl:
-            if self.method == "single":
-                preds = self.model(batch["observed_data"],
-                                   batch["available_forecasts"],
-                                   batch["observed_tp"],
-                                   batch["tp_to_predict"])
-            else:
-                # Return multi-resolution forecasts
-                preds, _ = self.model.predict(batch["observed_data"],
-                                              batch["available_forecasts"],
-                                              batch["observed_tp"],
-                                              batch["tp_to_predict"])
+            preds = self.model(batch["observed_data"],
+                                batch["available_forecasts"],
+                                batch["observed_tp"],
+                                batch["tp_to_predict"])
+           
             predictions.append(preds)
             trajs.append(batch["data_to_predict"])
-        if self.method == "single":
-            out_preds = torch.cat(predictions, 0)
-        else:
-            out_preds = [torch.concat(f) for f in zip(*predictions)]
 
-        # print(out_preds.shape)
+        out_preds = torch.cat(predictions, 0)
+        
         return out_preds, torch.cat(trajs, 0)
 
