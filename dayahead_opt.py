@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 
 import cvxpy as cp
-from utils import setup_seed
+from src.utils import setup_seed
 from copy import deepcopy
 
 setup_seed(9)

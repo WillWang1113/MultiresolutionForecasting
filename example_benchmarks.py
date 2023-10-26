@@ -7,11 +7,11 @@ import pandas as pd
 import torch
 
 from sklearn.metrics import mean_squared_error
-from dataset import generate_data_set
+from src.dataset import generate_data_set
 
-from model import GeneralNeuralLaplace
-from benchmarks import GeneralNeuralNetwork, GeneralPersistence
-from utils import train_and_test, setup_seed, init_weights
+from src.model import GeneralNeuralLaplace
+from src.benchmarks import GeneralNeuralNetwork, GeneralPersistence
+from src.utils import train_and_test, setup_seed, init_weights
 
 datasets = ["sine", "nrel", "mfred"]
 

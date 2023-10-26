@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 import pandas as pd
-from utils import setup_seed
+from src.utils import setup_seed
 
 from pathlib import Path
 

@@ -1,13 +1,8 @@
 import pickle
 import numpy as np
-
 import cvxpy as cp
-import pandas as pd
-from utils import setup_seed
 from copy import deepcopy
-import matplotlib.pyplot as plt
 import argparse
-# setup_seed(9)
 
 a = np.array([0.12, 0.17, 0.15, 0.19])
 b = np.array([14.8, 16.57, 15.55, 16.21])
@@ -22,7 +17,7 @@ shortage_price = 200
 surplus_price = 200
 P_battery = 40
 reserve = 0
-id_interval = 4
+id_interval = 4 # intra-day interval: 4hr
 
 N_g = 4
 # N_t = 24
@@ -31,23 +26,6 @@ Pg_min = np.array([28, 20, 30, 20])
 Pg_max = np.array([200, 290, 190, 260])
 RU = np.array([40, 30, 30, 50])
 RD = np.array([40, 30, 30, 50])
-
-load = np.array([
-    510, 530, 516, 510, 515, 544, 646, 686, 741, 734, 748, 760, 754, 700, 686,
-    720, 714, 761, 727, 714, 618, 584, 578, 544
-])
-
-load_scale_max = load.max() * 0.8
-load_scale_min = load.min() / 0.8
-
-# W = np.array([
-#     44.1, 48.5, 65.7, 144.9, 202.3, 317.3, 364.4, 317.3, 271, 306.9, 424.1,
-#     398, 487.6, 521.9, 541.3, 560, 486.8, 372.6, 367.4, 314.3, 316.6, 311.4,
-#     405.4, 470.4
-# ])
-
-# wind_scale_max = W.max()
-# wind_scale_min = W.min()
 
 
 def wind_post_process(preds, peneration_rate):
@@ -58,9 +36,6 @@ def wind_post_process(preds, peneration_rate):
 
 
 def load_post_process(preds):
-    # print(preds.max())
-    # preds = (preds - preds.min()) / (preds.max() - preds.min()) * (
-    # load_scale_max - load_scale_min) + load_scale_min
     return preds * 1e3
 
 
@@ -88,18 +63,12 @@ def day_ahead(load, wind, delta_t):
 
     result = prob.solve(solver=cp.GUROBI)
     assert prob.status == "optimal"
-    # print("-----test-----")
-    # print(delta_t * sum((a @ P**2 + b @ P + c.sum())).value)
-    # print((delta_t * VWC * sum(Pwc)).value)
-    # print("-----test-----")
 
     return result, P.value
 
 
 def intra_day(load, wind, delta_t, da_schedule):
-    # print(da_schedule.sum(axis=0))
-    # print(load)
-    # print(wind)
+
     N_t = len(load)
 
     P = cp.Variable((N_g, N_t), name='P')
@@ -142,16 +111,6 @@ def intra_day(load, wind, delta_t, da_schedule):
 
     result = prob.solve(solver=cp.GUROBI)
     assert prob.status == "optimal"
-    # print("-----test-----")
-    # print(delta_t * sum((a @ P**2 + b @ P + c.sum())).value)
-    # print((degrade_price * sum((
-    #                             (Pc * eta_c + Pd / eta_d) * delta_t))).value)
-    # print((delta_t * VWC * sum(Pwc)).value)
-    # print((shortage_price * sum(Pp) * delta_t).value)
-    # print("-----test-----")
-    # print((Pn.value * Pp.value).max())
-
-    # assert (np.zeros_like(Pn.value * Pp.value) == Pn.value * Pp.value).any()
 
     return result, (P.value, SOC.value, Pc.value, Pd.value, Pwc.value,
                     Pw.value)
@@ -186,16 +145,8 @@ def real_time(load, wind, P_schedule, Pd_schedule, Pc_schedule, delta_t):
 
     result = prob.solve(solver=cp.GUROBI)
     assert prob.status == "optimal"
-    # print("-----test-----")
-    # print(delta_t * sum((a @ P**2 + b @ P + c.sum())).value)
-    # print(degrade_price * sum((
-    #         (Pc_schedule * eta_c + Pd_schedule / eta_d) * delta_t)))
-    # print((delta_t * VWC * sum(Pwc)).value)
-    # print((delta_t * sum(shortage_price * Pp)).value)
-    # print("-----test-----")
-    print((Pn.value * Pp.value).max())
 
-    # assert (np.zeros_like(Pn.value * Pp.value) == Pn.value * Pp.value).any()
+    print((Pn.value * Pp.value).max())
 
     return result, (P.value, Pd_schedule, Pc_schedule, Pwc.value, Pw.value)
 
@@ -203,7 +154,7 @@ def real_time(load, wind, P_schedule, Pd_schedule, Pc_schedule, delta_t):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Run for multi-resolution schedules")
-    parser.add_argument("--peneration_rate", type=float, default=0.8)
+    parser.add_argument("--peneration_rate", type=float, default=0.5)
     args = parser.parse_args()
 
     # load wind
@@ -349,13 +300,7 @@ if __name__ == "__main__":
                         Pd_schedule=Pd,
                         Pc_schedule=Pc,
                         delta_t=1 / 12)
-                    # rt_cost, rt_schedule = real_time(ipb_load,
-                    #                                  ipb_labels[day].squeeze(),
-                    #                                  P_schedule=P,
-                    #                                  Pd_schedule=Pd,
-                    #                                  Pc_schedule=Pc,
-                    #                                  delta_t=1 / 4)
-                    # print(rt_cost)
+ 
                     avg_da_cost += da_cost
                     avg_ipb_cost += ipb_cost
                     avg_rt_cost += rt_cost

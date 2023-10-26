@@ -4,7 +4,7 @@ import torch
 from torch import nn
 from torchlaplace import laplace_reconstruct
 import torchlaplace.inverse_laplace
-from encoders import BiEncoder
+from src.encoders import BiEncoder
 
 logger = logging.getLogger()
 

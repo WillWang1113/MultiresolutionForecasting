@@ -10,6 +10,6 @@ python example.py -d mfred --add_external_feature --observe_steps $observe_steps
 python example_benchmarks.py -d nrel --add_external_feature --observe_steps $observe_steps --window_width $window_width --gpu 0 --avg_terms_list 12 3 1 --run_times 20 --persistence naive 
 python example_benchmarks.py -d mfred --add_external_feature --observe_steps $observe_steps --window_width $window_width --gpu 0 --avg_terms_list 12 3 1 --run_times 20 --persistence loop 
 
-
-
+python dayahead_opt.py
+python integrated_opt.py
 
