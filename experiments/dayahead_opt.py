@@ -1,8 +1,11 @@
+import sys
+sys.path.append("..")
+
 import pickle
 import numpy as np
 
 import cvxpy as cp
-from src.utils import setup_seed
+from torchlaplace.utils import setup_seed
 from copy import deepcopy
 
 setup_seed(9)

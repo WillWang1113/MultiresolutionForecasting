@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 import pandas as pd
-from src.utils import setup_seed
+from .utils import setup_seed
 
 from pathlib import Path
 
@@ -105,7 +105,7 @@ def collate_fn(data):
 
 # electricity load dataset
 def mfred(device, double=False, window_width=24 * 12 * 2):
-    df = pd.read_csv("datasets/MFRED_wiztemp.csv",
+    df = pd.read_csv("../datasets/MFRED_wiztemp.csv",
                      parse_dates=True,
                      index_col=0).values
     trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
@@ -130,7 +130,7 @@ def mfred(device, double=False, window_width=24 * 12 * 2):
 
 # wind power dataset
 def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
-    df = pd.read_csv("datasets/nrel_all.csv", parse_dates=True,
+    df = pd.read_csv("../datasets/nrel_all.csv", parse_dates=True,
                      index_col=0).values
     trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
     trajs = trajs.transpose(0, 2, 1)[::12]

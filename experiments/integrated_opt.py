@@ -146,7 +146,7 @@ def real_time(load, wind, P_schedule, Pd_schedule, Pc_schedule, delta_t):
     result = prob.solve(solver=cp.GUROBI)
     assert prob.status == "optimal"
 
-    print((Pn.value * Pp.value).max())
+    # print((Pn.value * Pp.value).max())
 
     return result, (P.value, Pd_schedule, Pc_schedule, Pwc.value, Pw.value)
 
@@ -202,8 +202,8 @@ if __name__ == "__main__":
         }
         for key in ["Persistence-BU", "Persistence-OPT"]:
             all_load_preds.pop(key, None)
-        print(all_load_preds.keys())
-        print(all_wind_preds.keys())
+        # print(all_load_preds.keys())
+        # print(all_wind_preds.keys())
         assert all_load_preds.keys() == all_wind_preds.keys()
 
         opt_result = {name: {} for name in sorted(all_load_preds.keys())}
@@ -290,7 +290,7 @@ if __name__ == "__main__":
                                                        ipb_wind_fcst,
                                                        da_schedule=da_schedule,
                                                        delta_t=1 / 12)
-                    # print(ipb_cost)
+                    print(ipb_cost)
                     (P, SOC, Pc, Pd, Pwc, Pw) = ipb_schedule
 
                     rt_cost, rt_schedule = real_time(

@@ -1,3 +1,6 @@
+import sys
+sys.path.append("..")
+
 import argparse
 import logging
 import pickle
@@ -7,11 +10,11 @@ import pandas as pd
 import torch
 
 from sklearn.metrics import mean_squared_error
-from src.dataset import generate_data_set
+from torchlaplace.dataset import generate_data_set
 
-from src.model import GeneralNeuralLaplace
-from src.benchmarks import GeneralNeuralNetwork, GeneralPersistence
-from src.utils import train_and_test, setup_seed, init_weights
+from torchlaplace.model import GeneralNeuralLaplace
+from torchlaplace.benchmarks import GeneralNeuralNetwork, GeneralPersistence
+from torchlaplace.utils import train_and_test, setup_seed, init_weights
 
 datasets = ["sine", "nrel", "mfred"]
 

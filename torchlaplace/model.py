@@ -2,9 +2,9 @@ import logging
 
 import torch
 from torch import nn
-from torchlaplace import laplace_reconstruct
+from .core import laplace_reconstruct
 import torchlaplace.inverse_laplace
-from src.encoders import BiEncoder
+from .encoders import BiEncoder
 
 logger = logging.getLogger()
 

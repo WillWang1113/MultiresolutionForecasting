@@ -15,20 +15,21 @@ pip install requirements.txt
 
 ## Experiments
 ### Data
-All the data for experiments are saved in ```datasets/```. In ```01-EDA.ipynb```, we show the basic plots on both energy data and weather forecasts data.
+All the data for experiments are saved in ```datasets/```. In ```experiments/01-EDA.ipynb```, we show the basic plots on both energy data and weather forecasts data.
 
 ### Reproduction
 To reproduce the experiments in the paper, please run
 ```
+cd experiments/
 bash run_experiments.sh
 ```
 Note: There is NO multi-GPU/parallelling training in our codes. 
 
-The results(models) and logs will be saved into new folders i.e. ```results/``` and ```logs/```. 
+The results(models) and logs will be saved into new folders i.e. ```results/``` and ```logs/``` under ```experiments/```.
 
-Then, go into ```02-post_analysis.ipynb``` for post analysis, including the post-coordination for benchmarks and the comparison of the total consistency error. Please replace the variable ```pth``` in the notebook.
+Then, go into ```experiments/02-post_analysis.ipynb``` for post analysis, including the post-coordination for benchmarks and the comparison of the total consistency error. Please replace the variable ```pth``` in the notebook.
 
-If you also want to have the same figures in the papaer, please refer to ```03-plot.ipynb```.
+If you also want to have the same figures in the papaer, please refer to ```experiments/03-plot.ipynb```.
 
 ### Example
 An example of seamless multi-resolution forecasts on wind power from Hierarchical Laplace(HL) and benchmarks.
