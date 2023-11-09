@@ -32,7 +32,7 @@ Then, go into ```experiments/02-post_analysis.ipynb``` for post analysis, includ
 If you also want to have the same figures in the papaer, please refer to ```experiments/03-plot.ipynb```.
 
 ### Example
-An example of seamless multi-resolution forecasts on wind power from Hierarchical Laplace(HL) and benchmarks.
+An example of seamless multi-resolution forecasts on wind power from Hierarchical Neural Laplace(HNL) and benchmarks.
 
 ![image info](./figs/display.png)
 
