@@ -41,7 +41,14 @@ def train_and_test(
 
         for batch in dltrain:
             optim.zero_grad()
-            train_loss = system.training_step(batch)
+            
+            # ! FOR NBEATX, TFT, DLINEAR, USE AMP
+            with torch.cuda.amp.autocast():
+                train_loss = system.training_step(batch)
+
+            # ! OTHERS NO AMP
+            # train_loss = system.training_step(batch)
+
             train_loss.backward()
             # Optional gradient clipping
             torch.nn.utils.clip_grad_norm_(system.model.parameters(),

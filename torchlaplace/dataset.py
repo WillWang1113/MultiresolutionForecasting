@@ -103,8 +103,9 @@ def collate_fn(data):
     }
     return data_dict
 
+
 # electricity load dataset
-def mfred(device, double=False, window_width=24 * 12 * 2):
+def mfred(double=False, window_width=24 * 12 * 2):
     df = pd.read_csv("../datasets/MFRED_wiztemp.csv",
                      parse_dates=True,
                      index_col=0).values
@@ -115,11 +116,11 @@ def mfred(device, double=False, window_width=24 * 12 * 2):
     time = torch.diff(t).sum()
     sample_rate = window_width / time
     if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
+        t = t.double()
+        trajs = torch.from_numpy(trajs).double()
     else:
-        t = t.to(device).float()
-        trajs = torch.from_numpy(trajs).to(device).float()
+        t = t.float()
+        trajs = torch.from_numpy(trajs).float()
     features = {
         "hist_feature": [0],
         "fcst_feature": [0],
@@ -128,8 +129,9 @@ def mfred(device, double=False, window_width=24 * 12 * 2):
     }
     return trajs, t.unsqueeze(0), sample_rate, features
 
+
 # wind power dataset
-def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
+def nrel(double=False, window_width=24 * 12 * 2, transformed=False):
     df = pd.read_csv("../datasets/nrel_all.csv", parse_dates=True,
                      index_col=0).values
     trajs = np.lib.stride_tricks.sliding_window_view(df, window_width, axis=0)
@@ -139,11 +141,11 @@ def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
     time = torch.diff(t).sum()
     sample_rate = window_width / time
     if double:
-        t = t.to(device).double()
-        trajs = torch.from_numpy(trajs).to(device).double()
+        t = t.double()
+        trajs = torch.from_numpy(trajs).double()
     else:
-        t = t.to(device).float()
-        trajs = torch.from_numpy(trajs).to(device).float()
+        t = t.float()
+        trajs = torch.from_numpy(trajs).float()
     features = {
         "hist_feature": [0],
         "fcst_feature": [0],
@@ -152,12 +154,9 @@ def nrel(device, double=False, window_width=24 * 12 * 2, transformed=False):
     }
     return trajs, t.unsqueeze(0), sample_rate, features
 
+
 # toy dataset
-def sine(device,
-         double=False,
-         trajectories_to_sample=100,
-         t_nsamples=200,
-         num_pi=4):
+def sine(double=False, trajectories_to_sample=100, t_nsamples=200, num_pi=4):
     t_nsamples_ref = 1000
     t_nsamples = int(t_nsamples_ref / 4 * num_pi)
 
@@ -165,9 +164,9 @@ def sine(device,
     t_begin = t_end / t_nsamples
 
     if double:
-        ti = torch.linspace(t_begin, t_end, t_nsamples).to(device).double()
+        ti = torch.linspace(t_begin, t_end, t_nsamples).double()
     else:
-        ti = torch.linspace(t_begin, t_end, t_nsamples).to(device)
+        ti = torch.linspace(t_begin, t_end, t_nsamples)
 
     def sampler(t, x0=0):
         # return torch.sin(t + x0)
@@ -212,18 +211,17 @@ def generate_data_set(name,
     setup_seed(seed)
     if name == "nrel":
         trajectories, t, sample_rate, feature = nrel(
-            device,
             double,
             transformed=kwargs.get("transformed"),
             window_width=kwargs.get("window_width"))
     elif name == "sine":
-        trajectories, t, sample_rate, feature = sine(device, double,
+        trajectories, t, sample_rate, feature = sine(double,
                                                      trajectories_to_sample,
                                                      t_nsamples)
 
     elif name == "mfred":
         trajectories, t, sample_rate, feature = mfred(
-            device, double, window_width=kwargs.get("window_width"))
+            double, window_width=kwargs.get("window_width"))
 
     else:
         raise ValueError("Unknown Dataset To Test")
@@ -231,18 +229,17 @@ def generate_data_set(name,
     if not add_external_feature:
         feature["avail_fcst_feature"] = None
 
-
     if not extrap:
         bool_mask = torch.FloatTensor(
             *trajectories.shape).uniform_() < (1.0 - percent_missing_at_random)
         if double:
-            float_mask = (bool_mask).double().to(device)
+            float_mask = (bool_mask).double()
         else:
-            float_mask = (bool_mask).float().to(device)
+            float_mask = (bool_mask).float()
         trajectories = float_mask * trajectories
 
     if noise_std:
-        trajectories += torch.randn(trajectories.shape).to(device) * noise_std
+        trajectories += torch.randn(trajectories.shape) * noise_std
 
     train_split = int(0.8 * trajectories.shape[0])
     test_split = int(0.9 * trajectories.shape[0])
@@ -269,10 +266,9 @@ def generate_data_set(name,
             val_trajectories), len(test_trajectories)
         dim = trajectories.shape[2]
         train_mean = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
-        train_mean = torch.from_numpy(np.nanmean(train_mean,
-                                                 axis=0)).to(device)
+        train_mean = torch.from_numpy(np.nanmean(train_mean, axis=0))
         train_std = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
-        train_std = torch.from_numpy(np.nanstd(train_std, axis=0)).to(device)
+        train_std = torch.from_numpy(np.nanstd(train_std, axis=0))
         train_trajectories = (torch.reshape(train_trajectories, (-1, dim)) -
                               train_mean) / train_std
         val_trajectories = (torch.reshape(val_trajectories,
@@ -320,3 +316,186 @@ def generate_data_set(name,
     return (input_dim, output_dim, sample_rate, t, dltrain, dlval, dltest,
             input_timesteps, output_timesteps, train_mean, train_std, feature)
 
+
+def generate_tree_data_set(
+    name,
+    device,
+    double=False,
+    batch_size=128,
+    extrap=0,
+    trajectories_to_sample=100,
+    percent_missing_at_random=0.0,
+    normalize=True,
+    test_set_out_of_distribution=True,
+    noise_std=None,
+    t_nsamples=200,
+    observe_stride=1,
+    predict_stride=1,
+    avail_fcst_stride=12,
+    add_external_feature=False,
+    observe_steps=200,
+    seed=0,
+    avg_terms=1,
+    **kwargs,
+):
+    setup_seed(seed)
+    if name == "nrel":
+        trajectories, t, sample_rate, feature = nrel(
+            double,
+            transformed=kwargs.get("transformed"),
+            window_width=kwargs.get("window_width"),
+        )
+    elif name == "sine":
+        trajectories, t, sample_rate, feature = sine(double,
+                                                     trajectories_to_sample,
+                                                     t_nsamples)
+
+    elif name == "mfred":
+        trajectories, t, sample_rate, feature = mfred(
+            double, window_width=kwargs.get("window_width"))
+
+    else:
+        raise ValueError("Unknown Dataset To Test")
+
+    if not add_external_feature:
+        feature["avail_fcst_feature"] = None
+
+    if not extrap:
+        bool_mask = torch.FloatTensor(
+            *trajectories.shape).uniform_() < (1.0 - percent_missing_at_random)
+        if double:
+            float_mask = (bool_mask).double()
+        else:
+            float_mask = (bool_mask).float()
+        trajectories = float_mask * trajectories
+
+    if noise_std:
+        trajectories += torch.randn(trajectories.shape) * noise_std
+
+    train_split = int(0.8 * trajectories.shape[0])
+    test_split = int(0.9 * trajectories.shape[0])
+    if test_set_out_of_distribution:
+        train_trajectories = trajectories[:train_split, :, :]
+        val_trajectories = trajectories[train_split:test_split, :, :]
+        test_trajectories = trajectories[test_split:, :, :]
+        if name.__contains__("time"):
+            train_t = t[:train_split]
+            val_t = t[train_split:test_split]
+            test_t = t[test_split:]
+        else:
+            train_t = t
+            val_t = t
+            test_t = t
+
+    else:
+        traj_index = torch.randperm(trajectories.shape[0])
+        train_trajectories = trajectories[traj_index[:train_split], :, :]
+        val_trajectories = trajectories[
+            traj_index[train_split:test_split], :, :]
+        test_trajectories = trajectories[traj_index[test_split:], :, :]
+        if name.__contains__("time"):
+            train_t = t[traj_index[:train_split]]
+            val_t = t[traj_index[train_split:test_split]]
+            test_t = t[traj_index[test_split:]]
+        else:
+            train_t = t
+            val_t = t
+            test_t = t
+
+    if normalize:
+        len_train, len_val, len_test = (
+            len(train_trajectories),
+            len(val_trajectories),
+            len(test_trajectories),
+        )
+        dim = trajectories.shape[2]
+        train_mean = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
+        train_mean = torch.from_numpy(np.nanmean(train_mean, axis=0))
+        train_std = torch.reshape(train_trajectories, (-1, dim)).cpu().numpy()
+        train_std = torch.from_numpy(np.nanstd(train_std, axis=0))
+        train_trajectories = (torch.reshape(train_trajectories, (-1, dim)) -
+                              train_mean) / train_std
+        val_trajectories = (torch.reshape(val_trajectories,
+                                          (-1, dim)) - train_mean) / train_std
+        test_trajectories = (torch.reshape(test_trajectories,
+                                           (-1, dim)) - train_mean) / train_std
+        train_trajectories = train_trajectories.reshape((len_train, -1, dim))
+        val_trajectories = val_trajectories.reshape((len_val, -1, dim))
+        test_trajectories = test_trajectories.reshape((len_test, -1, dim))
+    else:
+        train_std = 1
+        train_mean = 0
+    rand_idx = torch.randperm(len(train_trajectories)).tolist()
+    train_trajectories = train_trajectories[rand_idx]
+
+    dltrain = DataLoader(
+        TimeSeriesDataset(train_trajectories, train_t, observe_steps,
+                          avg_terms, **feature),
+        batch_size=len(train_trajectories),
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
+    dlval = DataLoader(
+        TimeSeriesDataset(val_trajectories, val_t, observe_steps, avg_terms,
+                          **feature),
+        batch_size=len(train_trajectories),
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
+    dltest = DataLoader(
+        TimeSeriesDataset(test_trajectories, test_t, observe_steps, avg_terms,
+                          **feature),
+        batch_size=len(train_trajectories),
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
+
+    train_data = next(iter(dltrain))
+    val_data = next(iter(dlval))
+    test_data = next(iter(dltest))
+
+    x_train = torch.concat(
+        [
+            train_data["observed_data"].flatten(1),
+            train_data["available_forecasts"].flatten(1),
+        ],
+        dim=-1,
+    )
+    y_train = train_data["data_to_predict"].flatten(1)
+    x_val = torch.concat(
+        [
+            val_data["observed_data"].flatten(1),
+            val_data["available_forecasts"].flatten(1),
+        ],
+        dim=-1,
+    )
+    y_val = val_data["data_to_predict"].flatten(1)
+    x_test = torch.concat(
+        [
+            test_data["observed_data"].flatten(1),
+            test_data["available_forecasts"].flatten(1),
+        ],
+        dim=-1,
+    )
+    y_test = test_data["data_to_predict"].flatten(1)
+    dltrain = (x_train.cpu().numpy(), y_train.cpu().numpy())
+    dlval = (x_val.cpu().numpy(), y_val.cpu().numpy())
+    dltest = (x_test.cpu().numpy(), y_test.cpu().numpy())
+
+    input_dim = x_train.shape[-1]
+    output_dim = y_train.shape[-1]
+
+    return (
+        input_dim,
+        output_dim,
+        sample_rate,
+        t,
+        dltrain,
+        dlval,
+        dltest,
+        None,
+        None,
+        train_mean,
+        train_std,
+        feature,
+    )

@@ -117,6 +117,7 @@ def experiment_with_all_baselines(
                                          out_timesteps=output_timesteps,
                                          in_timesteps=input_timesteps,
                                          nhidden=hidden_units,
+                                         device=device,
                                          method="lstm").to(device),
                 ),
                 (
@@ -126,12 +127,44 @@ def experiment_with_all_baselines(
                                          out_timesteps=output_timesteps,
                                          in_timesteps=input_timesteps,
                                          nhidden=hidden_units,
+                                         device=device,
                                          method="mlp").to(device),
+                ),
+                (
+                    "DLinear",
+                    GeneralNeuralNetwork(obs_dim=input_dim,
+                                         out_dim=output_dim,
+                                         out_timesteps=output_timesteps,
+                                         in_timesteps=input_timesteps,
+                                         nhidden=hidden_units,
+                                         device=device,
+                                         method="dlinear").to(device),
+                ),
+                (
+                    "NBEATSx",
+                    GeneralNeuralNetwork(obs_dim=input_dim,
+                                         out_dim=output_dim,
+                                         out_timesteps=output_timesteps,
+                                         in_timesteps=input_timesteps,
+                                         nhidden=hidden_units,
+                                         device=device,
+                                         method="nbeats").to(device),
+                ),
+                (
+                    "TFT",
+                    GeneralNeuralNetwork(obs_dim=input_dim,
+                                         out_dim=output_dim,
+                                         out_timesteps=output_timesteps,
+                                         in_timesteps=input_timesteps,
+                                         nhidden=hidden_units,
+                                         device=device,
+                                         method="tft").to(device),
                 ),
                 (
                     "Persistence",
                     GeneralPersistence(out_timesteps=output_timesteps,
                                        out_feature=feature["fcst_feature"],
+                                       device=device,
                                        method=persistence).to(device),
                 ),
             ]
@@ -148,7 +181,8 @@ def experiment_with_all_baselines(
                     logger.info("num_params={}".format(
                         sum(p.numel() for p in system.model.parameters())))
                     if model_name != "Persistence":
-                        init_weights(system.model, seed)
+                        if model_name != "TFT":
+                            init_weights(system.model, seed)
                         optimizer = torch.optim.Adam(system.model.parameters(),
                                                      lr=learning_rate,
                                                      weight_decay=weight_decay)
