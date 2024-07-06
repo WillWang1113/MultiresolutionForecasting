@@ -29,7 +29,7 @@ The results(models) and logs will be saved into new folders i.e. ```results/``` 
 
 Then, go into ```experiments/02-post_analysis.ipynb``` for post analysis, including the post-coordination for benchmarks and the comparison of the total consistency error. Please replace the variable ```pth``` in the notebook.
 
-If you also want to have the same figures in the papaer, please refer to ```experiments/03-plot.ipynb```.
+If you also want to have the same figures in the paper, please refer to ```experiments/03-plot.ipynb```.
 
 ### Example
 An example of seamless multi-resolution forecasts on wind power from Hierarchical Neural Laplace(HNL) and benchmarks.
