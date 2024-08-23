@@ -1,7 +1,7 @@
 # Seamless and multi-resolution energy forecasting
 > This work proposed an innovative and unified energy forecasting framework, **Hierarchical Neural Laplace (HNL)** for multi-resolution energy forecasting. Given the desired resolutions, the corresponding forecasts can be seamlessly generated without re-training or post-processing.
 
-Codes for the paper "Seamless and multi-resolution energy forecasting". 
+Codes for the paper "[Seamless and multi-resolution energy forecasting](https://ieeexplore.ieee.org/document/10643199)". 
 
 Authors: Chenxi Wang, Pierre Pinson, Yi Wang
 
